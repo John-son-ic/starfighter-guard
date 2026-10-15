@@ -81,18 +81,21 @@ export class TacticalHUD {
     this.lead.hidden = true; this.guide.style.display = 'none';
     this.reticle.classList.remove('aim-ready');
     if (target && !this.occluded) {
-      const aim = world.aimPoint(target);
-      const point = scene.project(aim); const actual = scene.project(target.position);
-      if (!actual.visible) text(this.hint, '目标在视野外 · 按箭头转向');
-      else if (!point.visible) text(this.hint, '提前量在视野外 · 调整航向');
-      this.lead.hidden = !point.visible;
-      this.lead.style.left = `${point.x * 100}%`; this.lead.style.top = `${point.y * 100}%`;
-      const aligned = world.forward(world.player).dot(aim.clone().sub(world.player.position).normalize()) > Math.cos(0.075);
-      this.reticle.classList.toggle('aim-ready', aligned && !world.player.weapon.overheated);
-      if (point.visible && actual.visible) {
-        this.guide.style.display = 'block';
-        this.guideLine.setAttribute('x1', `${actual.x * 100}%`); this.guideLine.setAttribute('y1', `${actual.y * 100}%`);
-        this.guideLine.setAttribute('x2', `${point.x * 100}%`); this.guideLine.setAttribute('y2', `${point.y * 100}%`);
+      const aim = world.interceptPoint(target);
+      if (!aim) text(this.hint, '暂无有效截击点 · 接近目标');
+      else {
+        const point = scene.project(aim); const actual = scene.project(target.position);
+        if (!actual.visible) text(this.hint, '目标在视野外 · 按箭头转向');
+        else if (!point.visible) text(this.hint, '提前量在视野外 · 调整航向');
+        this.lead.hidden = !point.visible;
+        this.lead.style.left = `${point.x * 100}%`; this.lead.style.top = `${point.y * 100}%`;
+        const aligned = world.forward(world.player).dot(aim.clone().sub(world.muzzlePosition(world.player)).normalize()) > Math.cos(0.075);
+        this.reticle.classList.toggle('aim-ready', aligned && !world.player.weapon.overheated);
+        if (point.visible && actual.visible) {
+          this.guide.style.display = 'block';
+          this.guideLine.setAttribute('x1', `${actual.x * 100}%`); this.guideLine.setAttribute('y1', `${actual.y * 100}%`);
+          this.guideLine.setAttribute('x2', `${point.x * 100}%`); this.guideLine.setAttribute('y2', `${point.y * 100}%`);
+        }
       }
     }
     for (const [id, marker] of this.markers) {

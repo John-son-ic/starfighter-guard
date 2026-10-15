@@ -42,6 +42,11 @@ await withBrowser('c03-usability', async ({ call, evaluate, capture, settle, pag
   assert.match(await evaluate(`document.querySelector('.target-readout small').textContent`), /按箭头转向/);
   await capture('target-behind');
 
+  await evaluate(`(()=>{const w=__flightQA.world;w.target.position.set(145,145,-2200);w.target.previous.copy(w.target.position);__flightQA.refresh()})()`);
+  assert.equal(await evaluate(`document.querySelector('.lead-marker').hidden`), true);
+  assert.match(await evaluate(`document.querySelector('.target-readout small').textContent`), /暂无有效截击点/);
+  await capture('target-out-of-range');
+
   const standard = await evaluate(`({ratio:__flightQA.diagnostics().pixelRatio,width:document.querySelector('canvas').width,height:document.querySelector('canvas').height})`);
   await evaluate(`document.querySelector('#quality').value='low';document.querySelector('#quality').dispatchEvent(new Event('change'))`);
   const low = await evaluate(`({ratio:__flightQA.diagnostics().pixelRatio,width:document.querySelector('canvas').width,height:document.querySelector('canvas').height})`);
@@ -62,5 +67,5 @@ await withBrowser('c03-usability', async ({ call, evaluate, capture, settle, pag
   const button = await evaluate(`(()=>{const r=document.querySelector('#launch-button').getBoundingClientRect();return{top:r.top,bottom:r.bottom}})()`);
   assert.ok(button.top >= 0 && button.bottom <= 640, 'Resume must remain visible on a compact desktop');
   assert.deepEqual(pageErrors, []);
-  return { checks: ['actual pointer steering', 'pause freezes camera/up and simulation', 'resume clears steering', 'pointer cancellation releases fire and steering', 'carrier occlusion hides lead and explains obstruction', 'clear target lead visible', 'HUD nodes persist across frames', 'rear target has direction arrow', 'low quality reduces each framebuffer dimension by 25% at DPR 1', 'quality saved and switch back works', 'six restarts retain geometry count', 'compact desktop controls remain accessible'], framebuffer: { standard, low }, restartGeometries: memory, note: 'Occlusion scenes are deliberately staged. These checks do not validate human handling or hardware FPS.' };
+  return { checks: ['actual pointer steering', 'pause freezes camera/up and simulation', 'resume clears steering', 'pointer cancellation releases fire and steering', 'carrier occlusion hides lead and explains obstruction', 'clear target lead visible', 'HUD nodes persist across frames', 'rear target has direction arrow', 'unreachable intercept hides lead and explains why', 'low quality reduces each framebuffer dimension by 25% at DPR 1', 'quality saved and switch back works', 'six restarts retain geometry count', 'compact desktop controls remain accessible'], framebuffer: { standard, low }, restartGeometries: memory, note: 'Occlusion scenes are deliberately staged. These checks do not validate human handling or hardware FPS.' };
 });

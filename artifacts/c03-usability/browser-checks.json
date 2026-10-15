@@ -8,6 +8,7 @@
     "clear target lead visible",
     "HUD nodes persist across frames",
     "rear target has direction arrow",
+    "unreachable intercept hides lead and explains why",
     "low quality reduces each framebuffer dimension by 25% at DPR 1",
     "quality saved and switch back works",
     "six restarts retain geometry count",

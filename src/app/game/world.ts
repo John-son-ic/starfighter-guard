@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createMission, advanceMission } from '../../sim/mission.ts';
 import { createWeapon, advanceWeapon, applyDamage } from '../../sim/combat.ts';
+import { solveIntercept } from '../../sim/intercept.ts';
 import { MISSION_CONFIG, WEAPON_CONFIG } from '../../shared/config.ts';
 import type { MissionState, ModelId, WeaponState } from '../../shared/types.ts';
 
@@ -18,6 +19,8 @@ const Y = new THREE.Vector3(0, 1, 0);
 const X = new THREE.Vector3(1, 0, 0);
 const Z = new THREE.Vector3(0, 0, 1);
 export const WEAK_POINT = new THREE.Vector3(145, -38, 210);
+const PROJECTILE_SPEED = 720;
+const PROJECTILE_LIFETIME = 2;
 
 function fighter(id: string, model: ModelId, team: Fighter['team'], position: THREE.Vector3, health: number): Fighter {
   return { id, model, team, position, previous: position.clone(), rotation: new THREE.Quaternion(), speed: model === 'eta2' ? 115 : 110, health, maxHealth: health, radius: model === 'arc170' ? 7 : 3, weapon: createWeapon(), cooldown: 0, evadingUntil: 0, phase: 0, invulnerable: 0 };
@@ -112,7 +115,7 @@ export class FlightWorld {
       let direction = this.forward(this.player);
       const target = this.target;
       if (target) {
-        const prediction = this.aimPoint(target).sub(this.player.position).normalize();
+        const prediction = this.aimPoint(target).sub(this.muzzlePosition(this.player)).normalize();
         if (direction.dot(prediction) > Math.cos(0.075)) direction = prediction;
       }
       this.shoot(this.player, direction, 18);
@@ -145,10 +148,15 @@ export class FlightWorld {
     if (!this.target) { this.targetId = null; if (this.enemies.length) this.selectNext(); }
   }
 
-  aimPoint(target: Fighter) {
-    const flightTime = target.position.distanceTo(this.player.position) / 720;
-    return target.position.clone().addScaledVector(this.forward(target), target.speed * Math.min(flightTime, 1.2));
+  muzzlePosition(f: Fighter) { return f.position.clone().addScaledVector(this.forward(f), f.radius + 3); }
+
+  /** Current heading/speed predict straight flight; subsequent AI turns are not forecast. */
+  interceptPoint(target: Fighter) {
+    const solution = solveIntercept(this.muzzlePosition(this.player), target.position, this.forward(target).multiplyScalar(target.speed), PROJECTILE_SPEED, PROJECTILE_LIFETIME);
+    return solution ? new THREE.Vector3(solution.point.x, solution.point.y, solution.point.z) : null;
   }
+
+  aimPoint(target: Fighter) { return this.interceptPoint(target) ?? target.position.clone(); }
 
   private movePlayer(dt: number, input: FlightInput) {
     const p = this.player;
@@ -238,8 +246,8 @@ export class FlightWorld {
 
   private shoot(f: Fighter, direction: THREE.Vector3, damage: number) {
     if (this.bolts.length >= 192) return;
-    const position = f.position.clone().addScaledVector(this.forward(f), f.radius + 3);
-    this.bolts.push({ id: ++this.boltSequence, owner: f.id, team: f.team, position, previous: position.clone(), velocity: direction.clone().multiplyScalar(720), life: 2, damage });
+    const position = this.muzzlePosition(f);
+    this.bolts.push({ id: ++this.boltSequence, owner: f.id, team: f.team, position, previous: position.clone(), velocity: direction.clone().multiplyScalar(PROJECTILE_SPEED), life: PROJECTILE_LIFETIME, damage });
   }
 
   private updateBolts(dt: number) {
