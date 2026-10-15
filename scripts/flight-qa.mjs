@@ -8,7 +8,7 @@ await withBrowser('c02', async ({ call, evaluate, capture, settle, pageErrors })
   await waitReady(); await capture('briefing');
   await evaluate(`document.querySelector('#launch-button').click()`);
   assert.equal(await evaluate('document.documentElement.dataset.flightState'), 'playing');
-  await evaluate(`window.__flightQA.pause();window.__flightQA.advance(200)`);
+  await evaluate(`window.__flightQA.pause();window.__flightQA.advance(200);window.__flightQA.refresh()`);
   assert.equal(await evaluate('window.__flightQA.world.enemies.length'), 3);
   await evaluate(`document.querySelector('#launch-button').click()`);
   await capture('flight');
@@ -22,6 +22,9 @@ await withBrowser('c02', async ({ call, evaluate, capture, settle, pageErrors })
   const after = await evaluate('window.__flightQA.snapshot()');
   assert.notDeepEqual(after.player, before.player); assert.ok(after.heat > before.heat);
   await evaluate(`(()=>{const w=window.__flightQA.world;for(let step=0;step<2400&&!w.terminal;step++){const input={yaw:0,pitch:0,roll:0,throttle:0,boost:false,fire:false};const t=w.target;if(t){const v=w.aimPoint(t).sub(w.player.position).applyQuaternion(w.player.rotation.clone().invert()).normalize();input.yaw=Math.max(-1,Math.min(1,Math.atan2(v.x,-v.z)*2));input.pitch=Math.max(-1,Math.min(1,Math.atan2(v.y,Math.hypot(v.x,v.z))*2));input.throttle=t.position.distanceTo(w.player.position)>280?1:-1;input.fire=v.z<-.985;}w.step(1/60,input);}})()`);
+  // The pilot above fast-forwards the world without render frames. Reinitialize the
+  // camera before taking a representative view instead of photographing artificial lag.
+  await evaluate('window.__flightQA.refresh()');
   await capture('combat');
   for (const [code, key] of [['Digit1', '1'], ['Digit2', '2']]) {
     await call('Input.dispatchKeyEvent', { type: 'keyDown', code, key }); await call('Input.dispatchKeyEvent', { type: 'keyUp', code, key });

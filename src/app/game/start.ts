@@ -1,11 +1,13 @@
-import { FlightWorld, NEUTRAL_INPUT, WEAK_POINT } from './world.ts';
-import { FlightScene, fighterLabel } from './scene.ts';
+import { FlightWorld, NEUTRAL_INPUT } from './world.ts';
+import { FlightScene } from './scene.ts';
 import { FlightAudio } from './audio.ts';
+import { TacticalHUD } from './hud.ts';
 import { loadSettings, saveSettings } from '../../platform/settings.ts';
 import { createFrameStats } from '../../platform/frame-stats.ts';
 import type { StorageLike } from '../../shared/types.ts';
 import type { FlightInput } from './world.ts';
 import './flight.css';
+import './hud.css';
 
 export function startFlight(app: HTMLElement) {
   document.title = '余烬航道 · Starfighter Guard';
@@ -20,8 +22,11 @@ export function startFlight(app: HTMLElement) {
     <footer class="telemetry"><div class="speed-cell"><small>航速</small><strong id="speed-value">115<em> m/s</em></strong><span>W / S 调节推力</span></div><div class="meters"><label>机体 <b id="hull-value">100%</b></label><div class="hud-bar"><i id="hull-bar"></i></div><label>武器热量 <b id="heat-value">0%</b></label><div class="hud-bar heat"><i id="heat-bar"></i></div><label>加速能量 <b id="boost-value">100%</b></label><div class="hud-bar boost"><i id="boost-bar"></i></div></div><div class="flight-stats"><strong id="kills-value">00 <small>/ 11</small></strong><span>敌机击毁</span><small>Q / E 滚转 · Shift 加速 · 左键开火</small></div></footer>
     <div class="flight-overlay"><div class="brief-card"><span class="brief-eyebrow">克隆人战争 / 原创护舰任务</span><h1>余烬航道</h1><p id="brief-copy">守望号的局部护盾已经失效。带领两架 ARC-170，清除三波机器人战机，守住母舰。</p><div class="brief-controls"><span><b>鼠标</b> 转向</span><span><b>左键</b> 激光炮</span><span><b>W / S</b> 油门</span><span><b>Q / E</b> 滚转</span><span><b>Shift</b> 加速</span><span><b>Tab</b> 选择目标</span></div><div class="settings-row"><label>音量<input id="volume" type="range" min="0" max="1" step="0.05"></label><label>灵敏度<input id="sensitivity" type="range" min="0.2" max="3" step="0.1"></label><label>画质<select id="quality"><option value="medium">标准</option><option value="low">低</option></select></label></div><button id="launch-button">进入战场 <span>↗</span></button><button id="restart-button" hidden>重新开始</button><a href="./?mode=models">查看舰船模型 ↗</a><small class="prototype-note">首版飞行原型 · 桌面鼠标键盘</small></div></div>
   </section>`;
-  const get = <T extends HTMLElement>(selector: string) => {
-    const element = app.querySelector<T>(selector); if (!element) throw new Error(`Missing ${selector}`); return element;
+  const elements = new Map<string, HTMLElement>();
+  const get = <T extends HTMLElement>(selector: string): T => {
+    let element = elements.get(selector);
+    if (!element) { element = app.querySelector<HTMLElement>(selector) ?? undefined; if (!element) throw new Error(`Missing ${selector}`); elements.set(selector, element); }
+    return element as T;
   };
   let storage: StorageLike;
   try { storage = window.localStorage; } catch { storage = { getItem: () => null, setItem: () => { throw new Error('Storage unavailable'); } }; }
@@ -39,11 +44,15 @@ export function startFlight(app: HTMLElement) {
   const keys = new Set<string>(); let mouseX = 0; let mouseY = 0; let firing = false;
   let previous = performance.now(); let accumulator = 0; let frameId = 0; let disposed = false;
   const abort = new AbortController(); const options = { signal: abort.signal };
-  const markers = new Map<string, HTMLDivElement>();
+  const tactical = new TacticalHUD(get('.target-layer'), get('.target-readout'), get('.lead-marker'), get('.reticle'));
+  get('#wing-status').innerHTML = [1, 2].map(i => `<div><i></i><span>苍鹭 ${i}</span><b></b></div>`).join('') + '<small></small>';
+  const wingRows = [...get('#wing-status').querySelectorAll('div')].map(row => ({ light: row.querySelector('i')!, value: row.querySelector('b')! }));
+  const wingOrder = get('#wing-status').querySelector('small')!;
+  let previousKills = -1;
 
   function resize() { scene.resize(innerWidth, innerHeight, settings.quality === 'low'); }
   function overlay(next: typeof state) {
-    state = next; keys.clear(); firing = false; accumulator = 0; previous = performance.now();
+    state = next; keys.clear(); firing = false; mouseX = mouseY = 0; accumulator = 0; previous = performance.now();
     if (next === 'playing') frameStats.reset();
     document.documentElement.dataset.flightState = next;
     get('.flight-overlay').hidden = next === 'playing';
@@ -58,11 +67,11 @@ export function startFlight(app: HTMLElement) {
   }
   function restart() {
     scene.reset(); world = new FlightWorld(scene.carrier);
-    for (const marker of markers.values()) marker.remove(); markers.clear(); mouseX = mouseY = 0;
+    tactical.reset();
     audio.start(); overlay('playing'); scene.render(world, 0); updateHUD();
   }
   function updateHUD() {
-    const put = (selector: string, value: string) => { get(selector).textContent = value; };
+    const put = (selector: string, value: string) => { const element = get(selector); if (element.textContent !== value) element.textContent = value; };
     const bar = (selector: string, value: number) => { get(selector).style.width = `${Math.max(0, Math.min(100, value))}%`; };
     put('#speed-value', `${Math.round(world.player.speed * (world.boosting ? 1.6 : 1))} m/s`);
     const hull = Math.ceil(world.player.health); const carrier = Math.ceil(world.carrierHealth / 10);
@@ -73,41 +82,20 @@ export function startFlight(app: HTMLElement) {
     get('.heat').classList.toggle('overheated', world.player.weapon.overheated);
     put('#phase-label', world.mission.phase === 'intermission' ? `下一波 ${Math.max(0, Math.ceil(8 - world.mission.phaseSeconds))} 秒` : world.mission.phase === 'briefing' ? '编队集结' : `迎击敌机 · ${world.enemies.length} 架`);
     put('#wave-label', `WAVE ${Math.max(1, world.mission.waveIndex + 1)} / 3`);
-    get('#kills-value').innerHTML = `${String(world.mission.kills).padStart(2, '0')} <small>/ 11</small>`;
+    if (world.mission.kills !== previousKills) { get('#kills-value').innerHTML = `${String(world.mission.kills).padStart(2, '0')} <small>/ 11</small>`; previousKills = world.mission.kills; }
     put('.flight-message', world.message);
     get('.damage-overlay').style.opacity = String(world.hitFlash * 0.6);
     get('.hit-confirm').style.opacity = String(world.hitConfirm);
     get('.steering-cursor').style.transform = `translate(${mouseX * 100}px, ${-mouseY * 80}px)`;
     const friends = ['wing-1', 'wing-2'].map(id => world.fighters.find(f => f.id === id));
-    get('#wing-status').innerHTML = friends.map((f, i) => `<div><i class="${f ? '' : 'lost'}"></i><span>苍鹭 ${i + 1}</span><b>${f ? `${Math.ceil(f.health / f.maxHealth * 100)}%` : '失联'}</b></div>`).join('') + `<small>${world.wingOrder === 'focus' ? '执行：集火目标' : world.wingOrder === 'follow' ? '执行：归队掩护' : '执行：自动护航'}</small>`;
-    const target = world.target;
-    put('#target-name', target ? fighterLabel(target) : '暂无目标');
-    put('#target-distance', target ? `${Math.round(target.position.distanceTo(world.player.position))} m` : '—');
-    const lead = get('.lead-marker'); lead.hidden = !target;
-    if (target) {
-      const point = scene.project(world.aimPoint(target)); lead.hidden = !point.visible;
-      lead.style.left = `${point.x * 100}%`; lead.style.top = `${point.y * 100}%`;
-    }
-    for (const [id, marker] of markers) if (!world.fighters.some(f => f.id === id)) { marker.remove(); markers.delete(id); }
-    for (const f of world.fighters) {
-      if (f.id === 'player') continue;
-      let marker = markers.get(f.id);
-      if (!marker) { marker = document.createElement('div'); get('.target-layer').append(marker); markers.set(f.id, marker); }
-      const projected = scene.project(f.position);
-      let x = projected.x; let y = projected.y;
-      const enemy = f.team === 'separatist';
-      marker.hidden = !enemy && !projected.visible;
-      if (!projected.visible) {
-        const dx = (x - 0.5) * (projected.behind ? -1 : 1); const dy = (y - 0.5) * (projected.behind ? -1 : 1);
-        const scale = Math.max(Math.abs(dx) / 0.42, Math.abs(dy) / 0.31, 1);
-        x = 0.5 + dx / scale; y = 0.5 + dy / scale;
-      }
-      marker.className = `ship-marker ${enemy ? 'hostile' : 'friendly'} ${world.targetId === f.id ? 'locked' : ''} ${projected.visible ? '' : 'offscreen'}`;
-      marker.style.left = `${x * 100}%`; marker.style.top = `${y * 100}%`;
-      marker.innerHTML = `<i>${projected.visible ? '' : '◇'}</i><span>${fighterLabel(f)} <small>${Math.round(f.position.distanceTo(world.player.position))}m</small></span>`;
-    }
-    const weak = scene.project(WEAK_POINT);
-    get('.flight-shell').dataset.weakVisible = String(weak.visible);
+    friends.forEach((f, i) => {
+      wingRows[i]!.light.classList.toggle('lost', !f);
+      const value = f ? `${Math.ceil(f.health / f.maxHealth * 100)}%` : '失联';
+      if (wingRows[i]!.value.textContent !== value) wingRows[i]!.value.textContent = value;
+    });
+    const order = world.wingOrder === 'focus' ? '执行：集火目标' : world.wingOrder === 'follow' ? '执行：归队掩护' : '执行：自动护航';
+    if (wingOrder.textContent !== order) wingOrder.textContent = order;
+    tactical.update(world, scene);
   }
 
   const volume = get<HTMLInputElement>('#volume'); volume.value = String(settings.volume);
@@ -137,12 +125,16 @@ export function startFlight(app: HTMLElement) {
   }, options);
   window.addEventListener('keyup', event => keys.delete(event.code), options);
   scene.renderer.domElement.addEventListener('pointermove', event => {
+    if (state !== 'playing') return;
     const rawX = (event.clientX / innerWidth - 0.5) * 2; const rawY = (0.5 - event.clientY / innerHeight) * 2;
     const deadzone = (value: number) => Math.sign(value) * Math.max(0, Math.abs(value) - 0.065) / 0.935;
     mouseX = Math.max(-1, Math.min(1, deadzone(rawX) * settings.sensitivity)); mouseY = Math.max(-1, Math.min(1, deadzone(rawY) * settings.sensitivity));
   }, options);
   scene.renderer.domElement.addEventListener('pointerdown', event => { if (event.button === 0 && state === 'playing') firing = true; }, options);
   window.addEventListener('pointerup', () => { firing = false; }, options);
+  const releasePointer = () => { firing = false; mouseX = mouseY = 0; };
+  scene.renderer.domElement.addEventListener('pointerleave', releasePointer, options);
+  scene.renderer.domElement.addEventListener('pointercancel', releasePointer, options);
   scene.renderer.domElement.addEventListener('contextmenu', event => event.preventDefault(), options);
   const input = (): FlightInput => ({ yaw: mouseX, pitch: mouseY, roll: Number(keys.has('KeyQ')) - Number(keys.has('KeyE')), throttle: Number(keys.has('KeyW')) - Number(keys.has('KeyS')), boost: keys.has('ShiftLeft') || keys.has('ShiftRight'), fire: firing || keys.has('Space') });
   function step(value: FlightInput) {
@@ -176,13 +168,16 @@ export function startFlight(app: HTMLElement) {
       pause() { overlay('paused'); }, restart,
       snapshot() { return { phase: world.mission.phase, kills: world.mission.kills, active: world.enemies.length, state, player: world.player.position.toArray(), health: world.player.health, carrier: world.carrierHealth, heat: world.player.weapon.heat }; },
       performance() { return frameStats.summary(); },
+      diagnostics() { return scene.diagnostics(); },
+      input,
+      refresh() { tactical.reset(); scene.reset(); scene.render(world, 0); updateHUD(); },
     } });
   }
   const cleanup = () => {
     if (disposed) return;
-    disposed = true; cancelAnimationFrame(frameId); abort.abort(); scene.dispose(); audio.dispose();
+    disposed = true; cancelAnimationFrame(frameId); abort.abort(); tactical.dispose(); scene.dispose(); audio.dispose();
     Reflect.deleteProperty(window, '__flightQA');
   };
-  window.addEventListener('pagehide', event => { if (!event.persisted) cleanup(); }, { once: true });
+  window.addEventListener('pagehide', event => { if (!event.persisted) cleanup(); else if (state === 'playing') overlay('paused'); }, options);
   if (import.meta.hot) import.meta.hot.dispose(cleanup);
 }

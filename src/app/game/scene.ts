@@ -13,6 +13,8 @@ export class FlightScene {
   private republicBolts: THREE.InstancedMesh;
   private enemyBolts: THREE.InstancedMesh;
   private flashes: { mesh: THREE.Mesh; life: number; duration: number; size: number }[] = [];
+  private flashPool: THREE.Mesh[] = [];
+  private flashGeometry = new THREE.IcosahedronGeometry(1, 1);
   private dummy = new THREE.Object3D();
   private ready = false;
 
@@ -51,16 +53,19 @@ export class FlightScene {
   }
 
   resize(width: number, height: number, low: boolean) {
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, low ? 1 : 1.5));
+    this.renderer.setPixelRatio(low ? 0.75 : Math.min(window.devicePixelRatio, 1.5));
     this.renderer.setSize(width, height); this.camera.aspect = width / height; this.camera.updateProjectionMatrix();
   }
 
   consume(events: readonly WorldEvent[]) {
     for (const event of events) {
       if (event.type !== 'impact' && event.type !== 'explosion') continue;
-      if (this.flashes.length > 40) break;
+      if (this.flashes.length >= 40) break;
       const duration = event.type === 'explosion' ? 0.8 : 0.2;
-      const mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshBasicMaterial({ color: event.enemy ? 0xffa15b : 0x89ccf2, transparent: true, opacity: 0.9, depthWrite: false }));
+      const mesh = this.flashPool.pop() ?? new THREE.Mesh(this.flashGeometry, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.9, depthWrite: false }));
+      (mesh.material as THREE.MeshBasicMaterial).color.set(event.enemy ? 0xffa15b : 0x89ccf2);
+      (mesh.material as THREE.MeshBasicMaterial).opacity = 0.9;
+      mesh.scale.setScalar(0.2);
       mesh.position.copy(event.position); this.scene.add(mesh);
       this.flashes.push({ mesh, life: duration, duration, size: event.type === 'explosion' ? 17 : 3 });
     }
@@ -90,15 +95,20 @@ export class FlightScene {
       const flash = this.flashes[i]!; flash.life -= dt;
       flash.mesh.scale.setScalar(flash.size * (1 - flash.life / flash.duration) + 0.2);
       (flash.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0, flash.life / flash.duration);
-      if (flash.life <= 0) { this.scene.remove(flash.mesh); disposeModel(flash.mesh); this.flashes.splice(i, 1); }
+      if (flash.life <= 0) { this.scene.remove(flash.mesh); this.flashPool.push(flash.mesh); this.flashes.splice(i, 1); }
     }
     const p = world.player;
     const desired = new THREE.Vector3(0, 4.8, 22).applyQuaternion(p.rotation).add(p.position);
     const obstruction = world.hullHit(p.position, desired);
     if (obstruction) desired.copy(p.position).lerp(desired, Math.max(0.08, (obstruction.distance - 2) / p.position.distanceTo(desired)));
-    if (!this.ready || dt === 0) this.camera.position.copy(desired);
-    else this.camera.position.lerp(desired, 1 - Math.exp(-dt * 9));
-    this.camera.up.copy(new THREE.Vector3(0, 1, 0).applyQuaternion(p.rotation));
+    const targetUp = new THREE.Vector3(0, 1, 0).applyQuaternion(p.rotation);
+    if (!this.ready) { this.camera.position.copy(desired); this.camera.up.copy(targetUp); }
+    else if (dt > 0) {
+      this.camera.position.lerp(desired, 1 - Math.exp(-dt * 9));
+      this.camera.up.lerp(targetUp, 1 - Math.exp(-dt * 7)).normalize();
+      const cameraHit = world.hullHit(p.position, this.camera.position);
+      if (cameraHit) this.camera.position.lerpVectors(p.position, this.camera.position, Math.max(0.02, (cameraHit.distance - 2) / p.position.distanceTo(this.camera.position)));
+    }
     this.camera.lookAt(p.position.clone().addScaledVector(world.forward(p), 100));
     this.camera.updateMatrixWorld(); this.ready = true;
     this.renderer.render(this.scene, this.camera);
@@ -107,13 +117,14 @@ export class FlightScene {
 
   project(position: THREE.Vector3) {
     const projected = position.clone().project(this.camera);
+    if (![projected.x, projected.y, projected.z].every(Number.isFinite)) return { x: 0.5, y: 1.5, visible: false, behind: false };
     return { x: (projected.x + 1) / 2, y: (-projected.y + 1) / 2, visible: projected.z > -1 && projected.z < 1 && Math.abs(projected.x) < 0.96 && Math.abs(projected.y) < 0.84, behind: projected.z > 1 };
   }
 
   reset() {
     for (const group of this.ships.values()) { this.scene.remove(group); disposeModel(group); }
     this.ships.clear();
-    for (const flash of this.flashes) { this.scene.remove(flash.mesh); disposeModel(flash.mesh); }
+    for (const flash of this.flashes) { this.scene.remove(flash.mesh); this.flashPool.push(flash.mesh); }
     this.flashes.length = 0; this.ready = false;
   }
 
@@ -126,7 +137,15 @@ export class FlightScene {
         (Array.isArray(object.material) ? object.material : [object.material]).forEach(material => materials.add(material));
       }
     });
+    this.flashGeometry.dispose();
+    for (const mesh of this.flashPool) (mesh.material as THREE.Material).dispose();
+    this.flashPool.length = 0;
+    this.republicBolts.dispose(); this.enemyBolts.dispose();
     geometry.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); this.renderer.dispose();
+  }
+
+  diagnostics() {
+    return { camera: this.camera.position.toArray(), up: this.camera.up.toArray(), pixelRatio: this.renderer.getPixelRatio(), geometries: this.renderer.info.memory.geometries, drawCalls: this.renderer.info.render.calls, activeEffects: this.flashes.length, pooledEffects: this.flashPool.length };
   }
 }
 
