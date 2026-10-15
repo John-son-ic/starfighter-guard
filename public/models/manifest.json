@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "units": "meters",
+  "forward": "-Z",
+  "up": "+Y",
+  "models": [
+    {
+      "id": "venator",
+      "file": "venator.glb",
+      "source": "src/visual/models/venator.ts",
+      "lengthMeters": 1155,
+      "dimensionsMeters": [
+        539.187744140625,
+        174.816650390625,
+        1155
+      ],
+      "triangles": 3108,
+      "materialBatches": 7,
+      "bytes": 229556
+    },
+    {
+      "id": "eta2",
+      "file": "eta2.glb",
+      "source": "src/visual/models/eta2.ts",
+      "lengthMeters": 5.47,
+      "dimensionsMeters": [
+        5.215116024017334,
+        1.5281965732574463,
+        5.46999979019165
+      ],
+      "triangles": 1336,
+      "materialBatches": 7,
+      "bytes": 101996
+    },
+    {
+      "id": "arc170",
+      "file": "arc170.glb",
+      "source": "src/visual/models/arc170.ts",
+      "lengthMeters": 12.71,
+      "dimensionsMeters": [
+        19.76834487915039,
+        4.174322128295898,
+        12.710000038146973
+      ],
+      "triangles": 1996,
+      "materialBatches": 7,
+      "bytes": 149596
+    },
+    {
+      "id": "vulture",
+      "file": "vulture.glb",
+      "source": "src/visual/models/vulture.ts",
+      "lengthMeters": 6.96,
+      "dimensionsMeters": [
+        4.840447902679443,
+        1.1397552490234375,
+        6.960000038146973
+      ],
+      "triangles": 660,
+      "materialBatches": 6,
+      "bytes": 52664
+    }
+  ]
+}

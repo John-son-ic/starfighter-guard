@@ -4,7 +4,7 @@
 
 - 首版范围只以docs/MVP.md为准；原始调研是参考，不是待实现清单。
 - Codex负责架构、接口、图形/建模、飞行手感、摄像机、HUD、集成和视觉验收。DSH负责有明确契约的纯逻辑、持久化、测试和复现。
-- DSH仅执行docs/tasks/DSH_QUEUE.md中满足依赖的READY任务；完成状态先记REVIEW，不自行判定最终验收。
+- DSH从DSH_HANDOFF.md的最新指示选择对应批次队列，只执行满足依赖的READY任务；完成状态先记REVIEW，不自行判定最终验收。
 - 依赖方向：shared → sim/platform → app/visual。sim不能import Three.js、DOM、浏览器全局、网络、实际时钟或随机全局状态。通过参数传入时间与输入。
 - 不改接口/依赖来掩盖问题，不削弱检查、不跳过失败用例、不用空实现宣称完成。接口缺陷写进报告并继续独立工作。
 - 同一工作目录默认轮流编辑。读取git status；不覆盖他方未提交改动、不擅自checkout/reset/clean/stash。双方可同时读，不能同时执行Git写入。多副本模式需各用独立分支，由Codex集成。

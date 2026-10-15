@@ -15,6 +15,6 @@ if not exist "node_modules\vite\bin\vite.js" (
     exit /b 1
   )
 )
-echo Starting the development baseline. Close this window to stop the server.
+echo Starting the flight prototype. Close this window to stop the server.
 call npm.cmd run dev -- --open
 if errorlevel 1 pause

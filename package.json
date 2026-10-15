@@ -7,9 +7,11 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "typecheck": "tsc --noEmit",
+    "models:export": "node scripts/export-models.mjs",
+    "assets:verify": "node scripts/verify-assets.mjs",
     "test": "node scripts/test.mjs",
     "build": "vite build",
-    "check": "npm run typecheck && npm test && npm run build",
+    "check": "npm run typecheck && npm test && npm run assets:verify && npm run build",
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": { "three": "0.186.1" },

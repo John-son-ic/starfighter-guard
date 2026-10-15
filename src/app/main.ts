@@ -1,12 +1,20 @@
-import { MVP_CONFIG } from '../shared/config.ts';
+import './style.css';
 
 const app = document.querySelector<HTMLElement>('#app');
 if (!app) throw new Error('Missing #app root');
 
-const title = document.createElement('h1');
-title.textContent = 'Starfighter Guard · 工程基线';
-const status = document.createElement('p');
-status.textContent = '协作仓库已准备。当前尚未实现游戏、3D模型和飞行。';
-const scope = document.createElement('p');
-scope.textContent = `首版：1名玩家、${MVP_CONFIG.friendlies}架友军、最多${MVP_CONFIG.maxActiveEnemies}架敌机。`;
-app.append(title, status, scope);
+try {
+  if (new URLSearchParams(location.search).get('mode') === 'models') {
+    const { startModelViewer } = await import('../visual/viewer.ts');
+    startModelViewer(app);
+  } else {
+    const { startFlight } = await import('./game/start.ts');
+    startFlight(app);
+  }
+} catch (error) {
+  app.replaceChildren();
+  const message = document.createElement('p');
+  message.className = 'error-message';
+  message.textContent = `场景无法启动：${error instanceof Error ? error.message : String(error)}。请确认浏览器启用了硬件加速与 WebGL 2。`;
+  app.append(message);
+}
