@@ -37,6 +37,10 @@ npm run dev
 
 Windows双击 `start-dev.cmd` 启动；第一次缺少依赖时会安装，随后进入任务简报，点击“进入战场”开始。关闭命令窗口可停止服务。
 
+已经构建好时，可双击 `start-play.cmd`，按窗口提示打开 `http://127.0.0.1:5174/`。这个入口运行时只需Node.js 24和支持WebGL 2的浏览器，不需要Vite或npm安装。
+
+制作可复制分享的试玩目录：先 `npm run build`，再 `node scripts/package-release.mjs`。输出位置会打印在窗口中；整目录复制即可，详见 [离线试玩包说明](docs/OFFLINE_RELEASE.md)。旧打包目录不会自动包含后续修复，请重新生成。
+
 ## 首次试玩
 
 鼠标离画面中心越远，转向越快；移回中心保持当前方向。W/S调油门，Q/E滚转，Shift短时加速，左键开火。Tab选敌，跟随金色提前量提示瞄准；1让两架僚机集火，2召回掩护。Esc暂停，切换到其他窗口会自动暂停。暂停页可调整音量、灵敏度和画质。
@@ -59,6 +63,7 @@ Windows双击 `start-dev.cmd` 启动；第一次缺少依赖时会安装，随�
 - `npm run check`现在也运行DSH提供的模型文件一致性检查；`npm run assets:verify`可单独执行。
 - `node scripts/flight-qa.mjs`可在本机Chrome复现输入和任务流程检查，截图在artifacts/c02/。
 - `node scripts/flight-usability-qa.mjs`检查暂停镜头、恢复输入、遮挡/屏外提示、画质分辨率、重开资源计数与小屏桌面布局，截图在artifacts/c03-usability/。两项飞行浏览器脚本使用同一端口，请顺序运行。
+- `node scripts/release-browser-qa.mjs`运行生产试玩包并阻断外部网页请求，检查实际画面、输入和模型页；截图在artifacts/c04-release/。同样使用5188端口，请与其他浏览器脚本顺序执行。
 
 ## 仓库地图
 

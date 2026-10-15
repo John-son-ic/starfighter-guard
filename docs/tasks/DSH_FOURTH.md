@@ -2,15 +2,22 @@
 
 2026-10-15；起点dd98f16。先读AGENTS.md、DSH_HANDOFF.md和docs/reports/codex-20261015-C03-usability.md。
 
-更新：D07已由Codex审查接受并接入，D08审查未通过待D11校正；详情先读docs/reports/codex-20261015-D07-D08-review.md。本批不扩展玩法、不写游戏后端、不安装依赖、不修改模型、画面、world.ts、package*.json或共享接口。这里的HTTP工具仅提供已构建的静态文件，固定监听127.0.0.1，帮助用户在浏览器打开ES模块。
+审查完成：D08—D11经DSH实现与Codex修正后接受，下面DSH自测结果保留为历史记录。最终依据为docs/reports/codex-20261015-D09-D11-review.md。本批无READY项，不扩展玩法、不写游戏后端、不修改全局配置；本地启动固定监听127.0.0.1。
 
 ## 执行与文件范围
 
 | ID | 状态 | 依赖 | 允许实现文件 |
 | --- | --- | --- | --- |
-| D09 | READY | 无 | scripts/serve-release.mjs、start-play.cmd、tests/dsh/release-server.test.mjs |
-| D10 | READY（等待D09自测通过） | D09实现与针对性检查通过，允许尚未最终审查 | scripts/package-release.mjs、tests/dsh/package-release.test.mjs、docs/OFFLINE_RELEASE.md |
-| D11 | READY | 无；按dd98f16之后实际源码核对 | docs/PLAYER_GUIDE.md、docs/MANUAL_CHECKLIST.md |
+| D09 | DONE（Codex修正链接与启动器后接受；文件符号链接仍有限制） | 无 | scripts/serve-release.mjs、start-play.cmd、tests/dsh/release-server.test.mjs |
+| D10 | DONE（Codex修正输入/输出链接及批处理换行后接受） | D09 | scripts/package-release.mjs、tests/dsh/package-release.test.mjs、docs/OFFLINE_RELEASE.md |
+| D11 | DONE（Codex补正HUD位置等细节，D08同时接受） | 无 | docs/PLAYER_GUIDE.md、docs/MANUAL_CHECKLIST.md |
+
+## 结果
+
+- D09：`node --test tests/dsh/release-server.test.mjs`退出码0，14项中12通过、0失败、2项因本机不允许创建符号链接而跳过。CLI实跑：`GET /`=200 text/html、`GET /?mode=models`=200、`GET /models/manifest.json`=200 application/json、`GET /nope.js`=404、`POST /`=405；`--port 0`与缺少dist/index.html均退出码2并给出处理提示；停止后端口释放、无残留进程。实现中修掉自身两个缺陷：默认根请求因`normalize(join(root,'/'))`保留结尾分隔符被误判越界（`/`曾返回403），以及盘符检查写成只匹配开头的`/^[a-zA-Z]:/`可被`/C:/...`绕过。未做Windows双击实测。证据：docs/reports/dsh-20261015-D09.md。
+- D10：`node --test tests/dsh/package-release.test.mjs`退出码0，10项中9通过、0失败、1项符号链接用例跳过。真实打包输出`artifacts/local/release/pack-NA8opR`，16文件、1256765字节；诱饵（node_modules/src/.git/package.json/.env.local/artifacts/tests）均未进入包。把整包复制到仓库外含空格路径后用包内脚本启动，首页200、入口JS 200 text/javascript、venator.glb 200 model/gltf-binary，证明不依赖仓库绝对路径与node_modules。实现中修掉自身一个设计错误：初版禁止“输出目录位于项目内”，与默认输出`artifacts/local/release`冲突（Codex审查亦先指出该用例失败），已改为只拒绝dist内输出与项目根自身。证据：docs/reports/dsh-20261015-D10.md。
+- D11：按Codex列出的6处偏差逐条校正并附代码位置，另自行排查出6处矛盾（interceptPoint已接入须改写为精确解并补无解提示、僚机屏外标记其实隐藏而非显示箭头、`◇`已换成`▴`、目标读数在准星右下方、未锁定距离按10米取整、hitFlash撞舰也会触发）。检查表由60项扩至68项，A—H各段编号连续、无重号，“记录”列68行全部留空。另更正D07报告中“低估飞行时间”的方向错误并补记Codex接入结果。证据：docs/reports/dsh-20261015-D11.md。
+- 全批收尾`npm run check`退出码0：tsc通过、tests 157项（154通过、0失败、3跳过）、4个GLB完整（533812字节）、vite build通过。三项均置REVIEW，等待审查。
 
 另外允许更新本文件的状态/结果、DSH_REPORT.md，并新增docs/reports/dsh-20261015-D09.md至D11.md（重名用新后缀）。不覆盖旧D07/D08报告，不替Codex把它们改为DONE。禁止Git写入、全局配置修改、改其他文件来掩盖失败。源码读取不受这些编辑范围限制。
 

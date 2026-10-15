@@ -1,0 +1,8 @@
+{
+  "method": "Windows shell file association via Start-Process",
+  "packagePath": "C:\\Users\\Johnsonzinc\\Desktop\\sw\\starfighter-guard\\artifacts\\local\\release review with spaces\\pack-FK24gg",
+  "port": 52776,
+  "httpStatus": 200,
+  "stopped": true,
+  "note": "Automated shell association execution, not a human mouse double-click or manual console-close test."
+}
