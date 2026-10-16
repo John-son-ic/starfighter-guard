@@ -55,6 +55,8 @@ Windows双击 `start-dev.cmd` 启动；第一次缺少依赖时会安装，随�
 
 ## 模型交付
 
+- 2026-10-16：狩猎者级已按用户参考图片再次细化，94,744三角面、9材质批次，GLB约5.56 MB。双击 `start-play.cmd` 后访问 `http://127.0.0.1:5174/?mode=models&model=venator`，可切换舰桥近景、引擎近景和腹面。源码位于 `src/visual/models/venator*.ts`；新截图见 `artifacts/c06-venator/`。其他战机仍为首版低模。
+
 - 修改源模型后运行 `npm run models:export`，更新4个GLB及manifest.json；脚本会重新导入GLB核对长度。
 - 预览页的“导出GLB”可以下载当前单机或同尺度编队；GLB可供其他3D工具导入。
 - 四种模型的透视、俯视及编队截图在 `artifacts/c01/`；视觉检查记录见 `docs/reports/codex-20261015-C01.md`。

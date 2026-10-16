@@ -1,51 +1,52 @@
-import { Group } from 'three';
-import { box, cylinder, finalize, nozzle, palette, plate, wedge } from './primitives.ts';
+import { BufferAttribute, Color, Group, Mesh, Vector3 } from 'three';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { finalize, palette, plate, wedge } from './primitives.ts';
+import { addVenatorDetail } from './venator-detail.ts';
+import { accelerateRaycast } from './venator-raycast.ts';
 
 export function createVenatorModel(): Group {
   const g = new Group();
   const p = palette();
-  const hull = [[0, -577.5], [32, -486], [270, 282], [264, 398], [222, 442], [205, 503], [-205, 503], [-222, 442], [-264, 398], [-270, 282], [-32, -486]] as const;
-  wedge(g, p.trim, hull, 38, -5);
-  wedge(g, p.hull, hull.map(([x, z]) => [x * 0.985, z * 0.995]), 24, 9);
-  const upper = [[0, -540], [25, -455], [229, 263], [205, 367], [121, 405], [-121, 405], [-205, 367], [-229, 263], [-25, -455]] as const;
-  plate(g, p.light, upper, 17, 19);
-  // Long red split hangar doors; dark seam intentionally remains visible.
-  plate(g, p.red, [[-6, -473], [-17, -400], [-27, 117], [-2, 117], [-2, -473]], 1.8, 28);
-  plate(g, p.red, [[6, -473], [17, -400], [27, 117], [2, 117], [2, -473]], 1.8, 28);
-  box(g, p.dark, [3, 1, 568], [0, 28.5, -165]);
-  box(g, p.trim, [65, 8, 35], [0, 30, 135]);
-  // Stepped aft command superstructure.
-  plate(g, p.hull, [[-64, 90], [64, 90], [117, 365], [-117, 365]], 27, 39);
-  plate(g, p.light, [[-48, 143], [48, 143], [83, 340], [-83, 340]], 19, 60);
-  box(g, p.red, [17, 2, 186], [0, 70, 243]);
-  for (const side of [-1, 1]) {
-    box(g, p.trim, [25, 54, 38], [side * 46, 94, 312], [0, 0, side * -0.07]);
-    plate(g, p.hull, [[side * 24, 257], [side * 74, 278], [side * 82, 333], [side * 21, 333]], 20, 128);
-    box(g, p.glass, [43, 6, 1.5], [side * 48, 128, 266], [0, side * -0.35, 0]);
-    box(g, p.dark, [16, 17, 151], [side * 252, -1, 312]);
-    box(g, p.glass, [1.2, 6, 125], [side * 261, -1, 314]);
-    // Red aft panels and small deck structures read at close range, without greeble overload.
-    plate(g, p.red, [[side * 111, 300], [side * 185, 340], [side * 174, 376], [side * 113, 354]], 1, 28);
-    for (let i = 0; i < 7; i++) {
-      const z = -190 + i * 72;
-      const x = side * (55 + i * 14);
-      box(g, i % 2 ? p.trim : p.hull, [17 + i * 2, 1.4, 34], [x, 28, z], [0, side * -0.27, 0]);
+  // Warm painted metal; the other fighters retain their existing palettes.
+  p.hull.color.setHex(0xb5b3aa); p.light.color.setHex(0xc5c2b7);
+  p.trim.color.setHex(0x737775); p.dark.color.setHex(0x282e30);
+  p.red.color.setHex(0x793c38);
+  for (const material of [p.hull, p.light, p.red]) { material.roughness = 0.88; material.metalness = 0.16; }
+  const hull = [[0,-577.5],[32,-486],[270,282],[264,398],[222,442],[205,503],[-205,503],[-222,442],[-264,398],[-270,282],[-32,-486]] as const;
+  plate(g, p.dark, hull, 40, -2);
+  plate(g, p.hull, hull.map(([x,z])=>[x*1.006,z]), 5, -23);
+  wedge(g, p.trim, hull, 7, 12);
+  wedge(g, p.hull, hull.map(([x,z])=>[x*0.985,z*0.997]), 13, 18);
+  const deck = [[0,-542],[25,-455],[241,275],[232,380],[205,410],[105,428],[-105,428],[-205,410],[-232,380],[-241,275],[-25,-455]] as const;
+  plate(g, p.light, deck, 5, 25);
+  addVenatorDetail(g, p);
+  const result = finalize(g, 'venator', 1155);
+  // Baked vertex tint survives GLB export. No image/texture fetches or shader-only detail.
+  result.traverse(object => {
+    if (!(object instanceof Mesh)) return;
+    const material = object.material;
+    if (Array.isArray(material)) return;
+    const positions = object.geometry.getAttribute('position');
+    const colors = new Uint8Array(positions.count * 3);
+    const color = new Color();
+    const v = new Vector3(), edgeA = new Vector3(), edgeB = new Vector3();
+    for (let i = 0; i < positions.count; i += 3) {
+      const x = (positions.getX(i) + positions.getX(i+1) + positions.getX(i+2)) / 3;
+      const z = (positions.getZ(i) + positions.getZ(i+1) + positions.getZ(i+2)) / 3;
+      const hash = Math.sin(Math.floor(x / 5) * 127.1 + Math.floor(z / 8) * 311.7) * 43758.5453;
+      v.fromBufferAttribute(positions,i);
+      edgeA.fromBufferAttribute(positions,i+1).sub(v); edgeB.fromBufferAttribute(positions,i+2).sub(v);
+      const broadFace = edgeA.cross(edgeB).lengthSq() > 57600;
+      const shade = material === p.engine ? 1 : broadFace ? 0.93 : 0.83 + (hash - Math.floor(hash)) * 0.17;
+      color.setRGB(shade, shade * 0.992, shade * 0.972);
+      for (let v = 0; v < 3; v++) colors.set([Math.round(color.r*255), Math.round(color.g*255), Math.round(color.b*255)], (i+v)*3);
     }
-    for (let i = 0; i < 4; i++) {
-      const x = side * (106 + i * 15);
-      const z = 130 + i * 59;
-      cylinder(g, p.trim, 12, 8, [x, 31, z]).rotation.x = Math.PI / 2;
-      box(g, p.hull, [17, 7, 18], [x, 37, z]);
-      for (const barrel of [-1, 1]) cylinder(g, p.dark, 1.7, 22, [x + barrel * 4, 39, z - 14]);
-    }
-    cylinder(g, p.trim, 23, 40, [side * 139, -1, 511]);
-    cylinder(g, p.trim, 17, 40, [side * 194, -9, 504]);
-    cylinder(g, p.trim, 11, 30, [side * 70, -16, 502]);
-    nozzle(g, p, 25, 58, [side * 139, -1, 548.5]);
-    nozzle(g, p, 18, 48, [side * 194, -9, 534]);
-    nozzle(g, p, 12, 31, [side * 70, -16, 529]);
-  }
-  cylinder(g, p.trim, 25, 40, [0, -9, 511]);
-  nozzle(g, p, 27, 58, [0, -9, 548.5]);
-  return finalize(g, 'venator', 1155);
+    object.geometry.setAttribute('color', new BufferAttribute(colors, 3, true));
+    material.vertexColors = true;
+    const original = object.geometry;
+    object.geometry = mergeVertices(original, 0.0001);
+    original.dispose();
+    accelerateRaycast(object);
+  });
+  return result;
 }

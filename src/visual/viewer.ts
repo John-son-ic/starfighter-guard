@@ -35,9 +35,9 @@ export function startModelViewer(app: HTMLElement) {
         <div class="ship-heading"><div class="eyebrow">CAPITAL SHIP / 01</div><h1>狩猎者级</h1><div class="ship-subtitle">VENATOR-CLASS</div><p class="ship-role">共和国主力舰 / 作战母舰</p></div>
         <div class="canvas-label">拖动旋转 · 滚轮缩放 · 右键平移</div>
         <div class="model-tag"><span class="tag-cross">+</span><span class="tag-title">VENATOR</span><small>FLIGHT CONFIGURATION</small></div>
-        <div class="view-tools" role="group" aria-label="视角与显示"><button data-view="perspective" class="selected">透视</button><button data-view="top">俯视</button><button data-view="front">正面</button><button data-view="rear">尾部</button><span class="tool-divider"></span><button id="rotate" aria-pressed="false">自动旋转</button><button id="wireframe" aria-pressed="false">线框</button></div>
+        <div class="view-tools" role="group" aria-label="视角与显示"><button data-view="perspective" class="selected">透视</button><button data-view="top">俯视</button><button data-view="front">正面</button><button data-view="rear">尾部</button><button data-view="bridge" data-detail-view>舰桥近景</button><button data-view="engines" data-detail-view>引擎近景</button><button data-view="bottom" data-detail-view>腹面</button><span class="tool-divider"></span><button id="rotate" aria-pressed="false">自动旋转</button><button id="wireframe" aria-pressed="false">线框</button></div>
         <footer class="data-panel"><div class="dimension"><span>舰体长度</span><strong id="length">1,155<small> m</small></strong><small>模型按参考尺度构建</small></div><div class="feature-block"><span>轮廓特征</span><div class="feature-tags"></div></div><div class="asset-actions"><button id="scale-view">同尺度编队 <span>↗</span></button><button id="export">导出 GLB <span>↓</span></button><small id="geometry-stats">正在加载模型</small></div></footer>
-        <div class="viewer-footnote"><span>LOW-POLY STUDY / 非电影级复刻</span><span id="render-status" role="status" aria-live="polite">正在初始化</span></div>
+        <div class="viewer-footnote"><span>PROCEDURAL MODEL / 程序化舰船模型</span><span id="render-status" role="status" aria-live="polite">正在初始化</span></div>
       </section>
     </div>`;
   const viewport = required<HTMLDivElement>(app, '.viewport');
@@ -46,6 +46,8 @@ export function startModelViewer(app: HTMLElement) {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.1;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.domElement.setAttribute('aria-label', '可拖动旋转的三维舰船模型');
   viewport.append(renderer.domElement);
   const scene = new THREE.Scene();
@@ -55,8 +57,13 @@ export function startModelViewer(app: HTMLElement) {
   scene.add(new THREE.HemisphereLight(0xc9deed, 0x263744, 1.35));
   const key = new THREE.DirectionalLight(0xfff0d6, 3.0);
   key.position.set(-3, 6, -5); scene.add(key);
+  key.castShadow = true;
+  key.shadow.mapSize.set(2048, 2048);
+  key.shadow.normalBias = 0.18;
   const fill = new THREE.DirectionalLight(0x588bb4, 1.6);
   fill.position.set(4, 0, 4); scene.add(fill);
+  const underside = new THREE.DirectionalLight(0xb3c9dd, 1.5);
+  underside.position.set(-1, -4, 1); scene.add(underside);
   let selected: ModelId = 'venator';
   let current: THREE.Group | null = null;
   let scaleMode = false;
@@ -68,11 +75,14 @@ export function startModelViewer(app: HTMLElement) {
   let previousTime = performance.now();
 
   function fit(view = 'perspective') {
-    const distance = radius / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2)) * Math.max(1, 1 / camera.aspect) * 1.17;
-    const direction = view === 'top' ? new THREE.Vector3(0, 1, 0.001) : view === 'front' ? new THREE.Vector3(0, 0.08, -1) : view === 'rear' ? new THREE.Vector3(0, 0.12, 1) : new THREE.Vector3(1.0, 0.85, -1.15).normalize();
-    camera.position.copy(focused).addScaledVector(direction, distance);
+    const detail = selected === 'venator' && !scaleMode;
+    const focus = detail && view === 'bridge' ? new THREE.Vector3(0, 30, 285) : detail && view === 'engines' ? new THREE.Vector3(0, -50, 525) : focused;
+    const viewRadius = detail && view === 'bridge' ? 150 : detail && view === 'engines' ? 245 : radius;
+    const distance = viewRadius / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2)) * Math.max(1, 1 / camera.aspect) * (detail && view === 'perspective' ? 0.88 : 1.17);
+    const direction = view === 'top' ? new THREE.Vector3(0, 1, 0.001) : view === 'front' ? new THREE.Vector3(0, 0.08, -1) : view === 'rear' ? new THREE.Vector3(0, 0.12, 1) : view === 'engines' ? new THREE.Vector3(0.25, 0.22, 1).normalize() : view === 'bottom' ? new THREE.Vector3(0.6, -1, -0.7).normalize() : detail ? new THREE.Vector3(-1.0, 0.7, -1.15).normalize() : new THREE.Vector3(1.0, 0.85, -1.15).normalize();
+    camera.position.copy(focus).addScaledVector(direction, distance);
     camera.near = Math.max(0.01, radius / 1000); camera.far = Math.max(500, radius * 50); camera.updateProjectionMatrix();
-    controls.target.copy(focused); controls.minDistance = radius * 0.08; controls.maxDistance = radius * 12; controls.update();
+    controls.target.copy(focus); controls.minDistance = radius * 0.08; controls.maxDistance = radius * 12; controls.update();
     app.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(button => button.classList.toggle('selected', button.dataset.view === view));
   }
   function setWireframe(value: boolean) {
@@ -87,6 +97,7 @@ export function startModelViewer(app: HTMLElement) {
   function choose(id: ModelId, formation = false) {
     if (current) { scene.remove(current); disposeModel(current); }
     selected = id; scaleMode = formation;
+    app.querySelectorAll<HTMLButtonElement>('[data-detail-view]').forEach(button => { button.hidden = id !== 'venator' || formation; });
     required(app, '.workspace').classList.remove('close-view');
     const entry = MODEL_CATALOG[id];
     current = formation ? new THREE.Group() : entry.factory();
@@ -100,10 +111,15 @@ export function startModelViewer(app: HTMLElement) {
     scene.add(current);
     const bounds = new THREE.Box3().setFromObject(current);
     focused = bounds.getCenter(new THREE.Vector3()); radius = bounds.getBoundingSphere(new THREE.Sphere()).radius;
+    key.position.copy(focused).addScaledVector(new THREE.Vector3(-1, 2, -1.4).normalize(), radius * 4);
+    key.target.position.copy(focused); scene.add(key.target);
+    Object.assign(key.shadow.camera, { left: -radius, right: radius, top: radius, bottom: -radius, near: radius, far: radius * 7 });
+    key.shadow.camera.updateProjectionMatrix();
     fit(); setWireframe(wireframe);
     let triangles = 0; let meshes = 0;
     current.traverse(object => {
       if (!(object instanceof THREE.Mesh)) return;
+      object.castShadow = true; object.receiveShadow = true;
       meshes++; triangles += (object.geometry.index?.count ?? object.geometry.getAttribute('position').count) / 3;
     });
     required(app, 'h1').textContent = formation ? '同尺度编队' : entry.name;
@@ -154,7 +170,7 @@ export function startModelViewer(app: HTMLElement) {
   const requested = new URLSearchParams(location.search).get('model');
   choose(ids.includes(requested as ModelId) ? requested as ModelId : 'venator', requested === 'formation');
   const view = new URLSearchParams(location.search).get('view');
-  if (view && ['top', 'front', 'rear'].includes(view)) fit(view);
+  if (view && ['top', 'front', 'rear', 'bridge', 'engines', 'bottom'].includes(view)) fit(view);
   if (new URLSearchParams(location.search).has('close') && scaleMode) { focused.set(-33, 82, -193); radius = 34; fit(); required(app, '.workspace').classList.add('close-view'); }
   function frame(time: number) {
     if (destroyed) return;

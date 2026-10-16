@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { withBrowser } from './browser-session.mjs';
 
-await withBrowser('c02', async ({ call, evaluate, capture, settle, pageErrors }) => {
+await withBrowser(process.argv[2] ?? 'c02', async ({ call, evaluate, capture, settle, pageErrors }) => {
   await call('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
   await call('Page.navigate', { url: 'http://127.0.0.1:5188/?qa=1' });
   const waitReady = () => evaluate(`new Promise((resolve,reject)=>{let n=0;const timer=setInterval(()=>{if(window.__flightQA&&document.querySelector('canvas')?.dataset.ready==='true'){clearInterval(timer);resolve(true)}else if(++n>150){clearInterval(timer);reject(new Error(document.body.innerText))}},100)})`);
+  const waitResult = () => evaluate(`new Promise((resolve,reject)=>{let n=0;const timer=setInterval(()=>{if(document.documentElement.dataset.flightState==='result'){clearInterval(timer);resolve(true)}else if(++n>100){clearInterval(timer);reject(new Error('Result screen timeout: '+document.documentElement.dataset.flightState))}},100)})`);
   await waitReady(); await capture('briefing');
   await evaluate(`document.querySelector('#launch-button').click()`);
   assert.equal(await evaluate('document.documentElement.dataset.flightState'), 'playing');
@@ -36,11 +37,11 @@ await withBrowser('c02', async ({ call, evaluate, capture, settle, pageErrors })
   assert.equal(await evaluate('document.documentElement.dataset.flightState'), 'paused');
   await capture('paused');
   await evaluate(`window.__flightQA.restart();window.__flightQA.pause();window.__flightQA.world.carrierHealth=0;window.__flightQA.advance(1);document.querySelector('#launch-button').click()`);
-  await evaluate('new Promise(r=>setTimeout(r,100))');
+  await waitResult();
   assert.equal(await evaluate('document.documentElement.dataset.flightState'), 'result');
   await capture('failure');
   await evaluate(`window.__flightQA.restart();window.__flightQA.pause();for(let wave=0;wave<3;wave++){window.__flightQA.advance(wave===0?182:482);window.__flightQA.world.enemies.forEach(e=>e.health=0);window.__flightQA.advance(1)}document.querySelector('#launch-button').click()`);
-  await evaluate('new Promise(r=>setTimeout(r,100))');
+  await waitResult();
   assert.equal(await evaluate('window.__flightQA.world.mission.phase'), 'won');
   assert.equal(await evaluate('document.documentElement.dataset.flightState'), 'result');
   await capture('victory');

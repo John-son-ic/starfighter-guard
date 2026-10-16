@@ -10,13 +10,13 @@
       "source": "src/visual/models/venator.ts",
       "lengthMeters": 1155,
       "dimensionsMeters": [
-        539.187744140625,
-        174.816650390625,
+        543.239990234375,
+        188.5,
         1155
       ],
-      "triangles": 3108,
-      "materialBatches": 7,
-      "bytes": 229556
+      "triangles": 94744,
+      "materialBatches": 9,
+      "bytes": 5557332
     },
     {
       "id": "eta2",

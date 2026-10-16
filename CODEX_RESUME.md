@@ -2,6 +2,10 @@
 
 ## 当前事实
 
+2026-10-16 / C06：按用户提供图片继续细化，现为94,744三角面、9材质批次、GLB 5,557,332字节。源码新增venator-geometry.ts（倒角/截面结构）、venator-raycast.ts（精确三角形空间索引）；顶点旧化颜色可随GLB导出。最新报告docs/reports/codex-20261016-C06-reference.md，截图artifacts/c06-venator/。完整检查164通过/4权限跳过；浏览器模型与飞行回归通过。C05下行参数是历史版本。无新DSH任务。
+
+2026-10-16：完成用户要求的C05狩猎者级外观细化。源码venator.ts + venator-detail.ts，GLB为19,048三角面/9材质批次/1,378,424字节；模型页新增舰桥、引擎、腹面视角，游戏使用同一工厂。详见docs/reports/codex-20261016-C05-venator.md。DSH仍无新READY任务。不要把此程序化游戏模型描述为电影级复刻。
+
 2026-10-15：默认入口为可玩三波护舰，模型页在/?mode=models。D01—D11已审查接受；D08由D11及Codex校正后接受。第四批审查见docs/reports/codex-20261015-D09-D11-review.md：修正链接路径与Windows启动器，生产包/Windows文件关联启动通过；全仓166项中162通过、4个文件符号链接用例因权限跳过。DSH本批完成后停止，无READY项。真人手感/难度及真实GPU性能仍未验收。
 
 ## 恢复顺序
