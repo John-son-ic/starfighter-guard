@@ -1,18 +1,18 @@
 import type { MissionConfig, ModelId, Settings, WeaponConfig } from './types.ts';
 
 export const MVP_CONFIG = Object.freeze({
-  friendlies: 2,
-  maxActiveEnemies: 4,
+  friendlies: 4,
+  maxActiveEnemies: 10,
   models: Object.freeze(['venator', 'eta2', 'arc170', 'vulture'] satisfies ModelId[]),
   playerHealth: 100,
-  carrierHealth: 1000,
+  carrierHealth: 4000,
   fixedStepSeconds: 1 / 60,
 });
 
 export const MISSION_CONFIG: MissionConfig = Object.freeze({
-  waves: Object.freeze([3, 4, 4]),
+  waves: Object.freeze([6, 10, 10, 10, 10]),
   briefingSeconds: 3,
-  intermissionSeconds: 8,
+  intermissionSeconds: 10,
   maxActiveEnemies: MVP_CONFIG.maxActiveEnemies,
 });
 

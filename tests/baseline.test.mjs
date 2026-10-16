@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MVP_CONFIG, MISSION_CONFIG, WEAPON_CONFIG, DEFAULT_SETTINGS } from '../src/shared/config.ts';
 
-test('mission remains within the agreed seven-fighter budget', () => {
-  assert.equal(1 + MVP_CONFIG.friendlies + MVP_CONFIG.maxActiveEnemies, 7);
-  assert.ok(MISSION_CONFIG.waves.every((count) => Number.isInteger(count) && count > 0 && count <= 4));
-  assert.equal(MISSION_CONFIG.waves.reduce((sum, count) => sum + count, 0), 11);
+test('mission remains within the agreed fifteen-fighter budget', () => {
+  assert.equal(1 + MVP_CONFIG.friendlies + MVP_CONFIG.maxActiveEnemies, 15);
+  assert.ok(MISSION_CONFIG.waves.every((count) => Number.isInteger(count) && count > 0 && count <= 10));
+  assert.equal(MISSION_CONFIG.waves.reduce((sum, count) => sum + count, 0), 46);
   assert.ok(Object.isFrozen(MISSION_CONFIG.waves));
 });
 

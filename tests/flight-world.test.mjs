@@ -17,13 +17,13 @@ test('swept sphere intersection catches a fast crossing and an inside start', ()
 
 test('world consumes spawn IDs once, removes destroyed entities and advances waves', () => {
   const { carrier, world } = setup(); spawn(world);
-  assert.equal(world.enemies.length, 3);
+  assert.equal(world.enemies.length, 6);
   assert.deepEqual(world.enemies.map(f => f.id), world.mission.activeEnemyIds);
   for (const enemy of world.enemies) enemy.health = 0;
   world.step(dt, NEUTRAL_INPUT);
-  assert.equal(world.enemies.length, 0); assert.equal(world.mission.kills, 3); assert.equal(world.mission.phase, 'intermission');
-  for (let i = 0; i < 482; i++) world.step(dt, NEUTRAL_INPUT);
-  assert.equal(world.enemies.length, 4); assert.equal(world.mission.waveIndex, 1);
+  assert.equal(world.enemies.length, 0); assert.equal(world.mission.kills, 6); assert.equal(world.mission.phase, 'intermission');
+  for (let i = 0; i < 602; i++) world.step(dt, NEUTRAL_INPUT);
+  assert.equal(world.enemies.length, 10); assert.equal(world.mission.waveIndex, 1);
   disposeModel(carrier);
 });
 
@@ -33,7 +33,7 @@ test('a moving laser really applies damage to a crossing enemy', () => {
   enemy.position.set(0, 200, -100); enemy.previous.copy(enemy.position);
   world.bolts.push({ id: 999, owner: 'player', team: 'republic', position: new THREE.Vector3(-20, 200, -100), previous: new THREE.Vector3(-20, 200, -100), velocity: new THREE.Vector3(2400, 0, 0), life: 1, damage: 18 });
   world.step(dt, NEUTRAL_INPUT);
-  assert.equal(enemy.health, 54); assert.equal(world.hitConfirm, 1); assert.ok(!world.bolts.some(b => b.id === 999));
+  assert.equal(enemy.health, 72); assert.equal(world.hitConfirm, 1); assert.ok(!world.bolts.some(b => b.id === 999));
   disposeModel(carrier);
 });
 
@@ -42,7 +42,7 @@ test('the visible carrier blocks a laser before it reaches an enemy below its de
   const enemy = world.enemies[0]; enemy.position.set(0, -180, 0); enemy.previous.copy(enemy.position);
   world.bolts.push({ id: 998, owner: 'player', team: 'republic', position: new THREE.Vector3(0, 150, 0), previous: new THREE.Vector3(0, 150, 0), velocity: new THREE.Vector3(0, -24000, 0), life: 1, damage: 72 });
   world.step(dt, NEUTRAL_INPUT);
-  assert.equal(enemy.health, 72); assert.ok(!world.bolts.some(b => b.id === 998));
+  assert.equal(enemy.health, 90); assert.ok(!world.bolts.some(b => b.id === 998));
   disposeModel(carrier);
 });
 
@@ -63,6 +63,6 @@ test('terminal worlds stay still and a new world clears all combat state', () =>
   world.step(dt, { ...NEUTRAL_INPUT, fire: true, boost: true });
   assert.equal(world.time, before.time); assert.deepEqual(world.player.position.toArray(), before.position);
   const fresh = new FlightWorld(carrier);
-  assert.equal(fresh.mission.kills, 0); assert.equal(fresh.bolts.length, 0); assert.equal(fresh.fighters.length, 3); assert.equal(fresh.carrierHealth, 1000);
+  assert.equal(fresh.mission.kills, 0); assert.equal(fresh.bolts.length, 0); assert.equal(fresh.fighters.length, 5); assert.equal(fresh.carrierHealth, 4000);
   disposeModel(carrier);
 });

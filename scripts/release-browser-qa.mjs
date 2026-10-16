@@ -9,7 +9,7 @@ const root = resolve(import.meta.dirname, '..');
 const pack = packRelease({ projectRoot: root, outputRoot: join(root, 'artifacts/local/release review with spaces') });
 assert.equal(listPackageFiles(pack.outputPath).some(file => file.startsWith('node_modules/') || file.startsWith('src/')), false);
 
-await withBrowser('c04-release', async ({ call, evaluate, capture, pageErrors, onEvent }) => {
+await withBrowser(process.argv[2] ?? 'c04-release', async ({ call, evaluate, capture, pageErrors, onEvent }) => {
   const externalRequests = []; const failedRequests = []; const origins = new Set();
   const origin = 'http://127.0.0.1:5188';
   onEvent('Fetch.requestPaused', async ({ requestId, request }) => {

@@ -4,7 +4,7 @@ import { finalize, palette, plate, wedge } from './primitives.ts';
 import { addVenatorDetail } from './venator-detail.ts';
 import { accelerateRaycast } from './venator-raycast.ts';
 
-export function createVenatorModel(): Group {
+export function createVenatorModel(includeTurrets = true): Group {
   const g = new Group();
   const p = palette();
   // Warm painted metal; the other fighters retain their existing palettes.
@@ -19,7 +19,7 @@ export function createVenatorModel(): Group {
   wedge(g, p.hull, hull.map(([x,z])=>[x*0.985,z*0.997]), 13, 18);
   const deck = [[0,-542],[25,-455],[241,275],[232,380],[205,410],[105,428],[-105,428],[-205,410],[-232,380],[-241,275],[-25,-455]] as const;
   plate(g, p.light, deck, 5, 25);
-  addVenatorDetail(g, p);
+  addVenatorDetail(g, p, includeTurrets);
   const result = finalize(g, 'venator', 1155);
   // Baked vertex tint survives GLB export. No image/texture fetches or shader-only detail.
   result.traverse(object => {

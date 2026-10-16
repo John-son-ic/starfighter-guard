@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { createMission, advanceMission } from '../../sim/mission.ts';
 import { createWeapon, advanceWeapon, applyDamage } from '../../sim/combat.ts';
 import { solveIntercept } from '../../sim/intercept.ts';
-import { MISSION_CONFIG, WEAPON_CONFIG } from '../../shared/config.ts';
+import { MISSION_CONFIG, MVP_CONFIG, WEAPON_CONFIG } from '../../shared/config.ts';
 import type { MissionState, ModelId, WeaponState } from '../../shared/types.ts';
 
 export interface FlightInput { yaw: number; pitch: number; roll: number; throttle: number; boost: boolean; fire: boolean }
@@ -13,7 +13,8 @@ export interface Fighter {
   weapon: WeaponState; cooldown: number; evadingUntil: number; phase: number; invulnerable: number;
 }
 export interface Bolt { id: number; team: Fighter['team']; owner: string; position: THREE.Vector3; previous: THREE.Vector3; velocity: THREE.Vector3; life: number; damage: number }
-export type WorldEvent = { type: 'explosion' | 'impact' | 'player-hit' | 'shot'; position: THREE.Vector3; enemy: boolean };
+export interface CarrierTurret { id: string; position: THREE.Vector3; direction: THREE.Vector3; cooldown: number; flash: number; targetId: string | null; aim: THREE.Vector3 | null; scanAt: number }
+export type WorldEvent = { type: 'explosion' | 'impact' | 'player-hit' | 'shot' | 'carrier-shot'; position: THREE.Vector3; enemy: boolean };
 const FORWARD = new THREE.Vector3(0, 0, -1);
 const Y = new THREE.Vector3(0, 1, 0);
 const X = new THREE.Vector3(1, 0, 0);
@@ -48,7 +49,11 @@ export class FlightWorld {
   readonly bolts: Bolt[] = [];
   readonly events: WorldEvent[] = [];
   mission: MissionState = createMission(MISSION_CONFIG);
-  carrierHealth = 1000;
+  carrierHealth: number = MVP_CONFIG.carrierHealth;
+  readonly turrets: CarrierTurret[] = [];
+  playerCollisionVersion = 0;
+  readonly collisionNormal = new THREE.Vector3(0, 1, 0);
+  turretShots = 0;
   boostEnergy = 100;
   boosting = false;
   time = 0;
@@ -67,9 +72,8 @@ export class FlightWorld {
     carrier.updateMatrixWorld(true);
     this.carrierBounds = new THREE.Box3().setFromObject(carrier);
     this.player = fighter('player', 'eta2', 'republic', new THREE.Vector3(110, 95, 300), 100);
-    this.fighters = [this.player,
-      fighter('wing-1', 'arc170', 'republic', new THREE.Vector3(68, 99, 255), 160),
-      fighter('wing-2', 'arc170', 'republic', new THREE.Vector3(152, 99, 255), 160)];
+    this.fighters = [this.player, ...Array.from({length:MVP_CONFIG.friendlies},(_,i)=>fighter(`wing-${i+1}`, 'arc170', 'republic', new THREE.Vector3(110 + (i%2===0?-1:1)*(48+Math.floor(i/2)*40), 107+Math.floor(i/2)*15, 242-Math.floor(i/2)*36), 180))];
+    for (const side of [-1,1]) for(let i=0;i<4;i++) this.turrets.push({id:`turret-${side}-${i}`,position:new THREE.Vector3(side*(111+i*17),-18.25,142+i*57),direction:FORWARD.clone(),cooldown:0.3+i*0.3+(side+1)*0.1,flash:0,targetId:null,aim:null,scanAt:i*0.04});
   }
 
   get enemies() { return this.fighters.filter(f => f.team === 'separatist' && f.health > 0); }
@@ -109,6 +113,7 @@ export class FlightWorld {
     for (const f of this.fighters) { f.previous.copy(f.position); f.invulnerable = Math.max(0, f.invulnerable - dt); }
     this.movePlayer(dt, input);
     for (const f of this.fighters) if (f.id !== 'player' && f.health > 0) this.moveAI(f, dt);
+    this.updateTurrets(dt);
     const weapon = advanceWeapon(this.player.weapon, dt, input.fire, WEAPON_CONFIG);
     this.player.weapon = weapon.state;
     if (weapon.fired && this.player.health > 0) {
@@ -137,14 +142,21 @@ export class FlightWorld {
     for (const event of result.events) {
       if (event.type === 'spawn-wave') {
         event.enemyIds.forEach((id, i) => {
-          const f = fighter(id, 'vulture', 'separatist', new THREE.Vector3(-180 + i * 140, 120 + i * 25, -700 - i * 65), 72);
+          const slot = i%5, row = Math.floor(i/5);
+          const flank = event.waveIndex%2 ? -1 : 1;
+          const f = fighter(id, 'vulture', 'separatist', new THREE.Vector3(flank*(-320 + slot*150), 135+row*65+slot*12, -780-row*160-slot*30), 90);
           f.rotation.setFromAxisAngle(Y, Math.PI); f.phase = i + event.waveIndex; f.cooldown = i * 0.4;
           this.fighters.push(f);
         });
         this.message = `敌机第 ${event.waveIndex + 1} 波！优先保护守望号。`;
       }
     }
-    if (oldPhase !== this.mission.phase && this.mission.phase === 'intermission') this.message = '当前空域已清理。下一波机群正在接近。';
+    if (oldPhase !== this.mission.phase && this.mission.phase === 'intermission') {
+      this.player.health=Math.min(100,this.player.health+25);
+      this.carrierHealth=Math.min(MVP_CONFIG.carrierHealth,this.carrierHealth+180);
+      for(const f of this.fighters)if(f.team==='republic'&&f.id!=='player')f.health=Math.min(f.maxHealth,f.health+35);
+      this.message = '空域暂时安全：应急抢修恢复座机与舰体，下一波机群正在接近。';
+    }
     if (!this.target) { this.targetId = null; if (this.enemies.length) this.selectNext(); }
   }
 
@@ -204,14 +216,16 @@ export class FlightWorld {
     let shootingCarrier = false;
     if (enemy) {
       shootingCarrier = Math.floor(f.phase) % 3 !== 0;
-      target = shootingCarrier ? null : this.player;
-      destination = shootingCarrier ? WEAK_POINT.clone() : this.player.position.clone();
+      const allies=this.fighters.filter(ship=>ship.team==='republic'&&ship.health>0);
+      target = shootingCarrier ? null : allies[Math.floor(f.phase)%allies.length] ?? this.player;
+      destination = shootingCarrier ? WEAK_POINT.clone() : target!.position.clone();
       if (f.position.distanceTo(destination) < (shootingCarrier ? 180 : 95)) f.evadingUntil = this.time + 4;
       if (this.time < f.evadingUntil) destination = new THREE.Vector3((f.phase % 2 ? -1 : 1) * 600, 180 + Math.sin(f.phase) * 40, -250);
     } else {
       const enemies = this.enemies;
       target = (this.wingOrder === 'focus' ? enemies.find(e => e.id === this.focusId) : null) ?? enemies.sort((a, b) => a.position.distanceToSquared(f.position) - b.position.distanceToSquared(f.position))[0] ?? null;
-      const formation = new THREE.Vector3(f.id === 'wing-1' ? -42 : 42, 4, -45).applyQuaternion(this.player.rotation).add(this.player.position);
+      const index=Number(f.id.split('-')[1])-1;
+      const formation = new THREE.Vector3((index%2===0?-1:1)*(48+Math.floor(index/2)*38), 12+Math.floor(index/2)*14, -55-Math.floor(index/2)*38).applyQuaternion(this.player.rotation).add(this.player.position);
       destination = target && this.wingOrder !== 'follow' ? target.position.clone() : formation;
       f.speed = target && this.wingOrder !== 'follow' ? 130 : THREE.MathUtils.clamp(this.player.speed + formation.clone().sub(f.position).dot(this.forward(this.player)) * 1.5, 65, 200);
       if (target && f.position.distanceTo(target.position) < 80) f.evadingUntil = this.time + 2;
@@ -234,13 +248,57 @@ export class FlightWorld {
     const hit = this.hullHit(f.previous, f.position, f.radius);
     if (!hit) return;
     const normal = hit.face?.normal.clone().transformDirection(hit.object.matrixWorld) ?? Y.clone();
-    f.position.copy(hit.point).addScaledVector(normal, f.radius + 2);
+    // Retreat from the last outside position, then discard the interpolation segment
+    // through the hull. A bounce must not leave the camera travelling through metal.
+    if(normal.dot(f.previous.clone().sub(hit.point))<0) normal.negate();
+    f.position.copy(f.previous).addScaledVector(normal, f.radius + 8);
+    f.previous.copy(f.position);
     const direction = this.forward(f).reflect(normal).addScaledVector(normal, 0.6).normalize();
     f.rotation.setFromRotationMatrix(new THREE.Matrix4().lookAt(new THREE.Vector3(), direction, Y));
+    if (f.id==='player') { this.playerCollisionVersion++; this.collisionNormal.copy(normal); }
     if (f.invulnerable <= 0) {
       f.health = applyDamage(f.health, f.id === 'player' ? 24 : 10); f.invulnerable = 0.9;
       this.events.push({ type: 'impact', position: hit.point.clone(), enemy: false });
       if (f.id === 'player') { this.hitFlash = 1; this.message = '舰体碰撞！注意保持安全距离。'; }
+    }
+  }
+
+  private updateTurrets(dt: number) {
+    for(const turret of this.turrets) {
+      turret.cooldown-=dt; turret.flash=Math.max(0,turret.flash-dt);
+      if(this.time>=turret.scanAt) {
+      turret.scanAt=this.time+0.25;
+      const candidates=this.enemies.filter(e=>e.position.distanceTo(turret.position)<1250 && e.position.y>turret.position.y+8)
+        .sort((a,b)=>a.position.distanceToSquared(turret.position)-b.position.distanceToSquared(turret.position));
+      let aim: THREE.Vector3 | null=null;
+      turret.targetId=null;
+      for(const enemy of candidates) {
+        const velocity=this.forward(enemy).multiplyScalar(enemy.speed);
+        const solution=solveIntercept(turret.position,enemy.position,velocity,580,2.4);
+        if(!solution)continue;
+        const point=new THREE.Vector3(solution.point.x,solution.point.y,solution.point.z);
+        const direction=point.clone().sub(turret.position).normalize();
+        if(direction.y<0.04)continue;
+        // Check the entire line from the mount; no firing through bridge or deck.
+        if(this.hullHit(turret.position,point))continue;
+        turret.targetId=enemy.id; aim=direction; break;
+      }
+      turret.aim=aim;
+      }
+      if(!turret.aim||!this.enemies.some(e=>e.id===turret.targetId))continue;
+      turret.direction.lerp(turret.aim,1-Math.exp(-dt*2.8)).normalize();
+      if(turret.cooldown>0||turret.direction.dot(turret.aim)<0.995||this.bolts.length>=192)continue;
+      const position=turret.position.clone().addScaledVector(turret.direction,38);
+      if(this.hullHit(turret.position,position))continue;
+      const target=this.enemies.find(e=>e.id===turret.targetId)!;
+      const solution=solveIntercept(position,target.position,this.forward(target).multiplyScalar(target.speed),580,2.4);
+      if(!solution)continue;
+      const direction=new THREE.Vector3(solution.point.x,solution.point.y,solution.point.z).sub(position).normalize();
+      if(turret.direction.dot(direction)<0.995)continue;
+      turret.direction.copy(direction);
+      this.bolts.push({id:++this.boltSequence,team:'republic',owner:turret.id,position,previous:position.clone(),velocity:direction.clone().multiplyScalar(580),life:2.4,damage:12});
+      turret.flash=0.13; turret.cooldown=2.6; this.turretShots++;
+      if(this.turretShots%3===1)this.events.push({type:'carrier-shot',position:position.clone(),enemy:false});
     }
   }
 

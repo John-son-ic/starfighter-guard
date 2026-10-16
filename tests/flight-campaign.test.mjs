@@ -6,10 +6,10 @@ import { createVenatorModel } from '../src/visual/models/venator.ts';
 import { disposeModel } from '../src/visual/models/primitives.ts';
 
 test('a bounded pilot can finish the campaign through actual movement, shots and damage', () => {
-  const carrier = createVenatorModel();
+  const carrier = createVenatorModel(false);
   const world = new FlightWorld(carrier);
   let shots = 0;
-  for (let step = 0; step < 18000 && !world.terminal; step++) {
+  for (let step = 0; step < 36000 && !world.terminal; step++) {
     const input = { ...NEUTRAL_INPUT };
     const target = world.target;
     if (target) {
@@ -21,11 +21,11 @@ test('a bounded pilot can finish the campaign through actual movement, shots and
     }
     world.step(1 / 60, input);
     shots += world.events.filter(event => event.type === 'shot').length;
-    assert.ok(world.enemies.length <= 4);
+    assert.ok(world.enemies.length <= 10);
     assert.ok(Number.isFinite(world.player.position.lengthSq()));
   }
-  assert.equal(world.mission.phase, 'won');
-  assert.equal(world.mission.kills, 11);
+  assert.equal(world.mission.phase, 'won',JSON.stringify({time:world.time,kills:world.mission.kills,health:world.player.health,carrier:world.carrierHealth,reason:world.mission.lossReason,turretShots:world.turretShots}));
+  assert.equal(world.mission.kills, 46);
   assert.ok(world.player.health > 0 && world.carrierHealth > 0);
   assert.ok(shots > 0, 'pilot fired actual projectiles; no health edits or synthetic death events');
   console.log(`[flight pilot] ${world.time.toFixed(1)}s simulated; ${shots} shots; carrier ${world.carrierHealth}; player ${world.player.health}`);

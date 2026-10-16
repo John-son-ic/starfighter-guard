@@ -3,12 +3,19 @@ import { MODEL_CATALOG } from '../../visual/models/index.ts';
 import { disposeModel } from '../../visual/models/primitives.ts';
 import { FlightWorld, WEAK_POINT } from './world.ts';
 import type { Fighter, WorldEvent } from './world.ts';
+import { createVenatorModel } from '../../visual/models/venator.ts';
+import { createCarrierTurret } from '../../visual/models/carrier-turret.ts';
+import { safeChaseCamera } from './camera.ts';
 
 export class FlightScene {
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(58, 1, 0.4, 14000);
   readonly renderer: THREE.WebGLRenderer;
-  readonly carrier = MODEL_CATALOG.venator.factory();
+  readonly carrier = createVenatorModel(false);
+  private turretHeads: THREE.Group[] = [];
+  private turretFlashes: THREE.Mesh[] = [];
+  private turretBases: THREE.InstancedMesh;
+  private collisionVersion = -1;
   private ships = new Map<string, THREE.Group>();
   private republicBolts: THREE.InstancedMesh;
   private enemyBolts: THREE.InstancedMesh;
@@ -30,6 +37,14 @@ export class FlightScene {
     const light = new THREE.DirectionalLight(0xffedcf, 2.8); light.position.set(-1600, 2200, -900); this.scene.add(light);
     const rim = new THREE.DirectionalLight(0x436c9c, 1.2); rim.position.set(600, -500, 1200); this.scene.add(rim);
     this.scene.add(this.carrier);
+    const flashGeometry=new THREE.SphereGeometry(1,8,6);
+    const flashMaterial=new THREE.MeshBasicMaterial({color:0x9affb7});
+    this.turretBases=new THREE.InstancedMesh(new THREE.CylinderGeometry(9,11,4,16),new THREE.MeshStandardMaterial({color:0x737775,roughness:0.8}),8);
+    this.scene.add(this.turretBases);
+    for(let i=0;i<8;i++) {
+      const head=createCarrierTurret(); this.scene.add(head);this.turretHeads.push(head);
+      const flash=new THREE.Mesh(flashGeometry,flashMaterial);flash.scale.setScalar(3);flash.visible=false;this.scene.add(flash);this.turretFlashes.push(flash);
+    }
     const starPositions = new Float32Array(2400 * 3);
     for (let i = 0; i < 2400; i++) {
       const u = ((i * 0.61803398875) % 1) * Math.PI * 2;
@@ -85,12 +100,20 @@ export class FlightScene {
     for (const bolt of world.bolts) {
       this.dummy.position.copy(bolt.previous).lerp(bolt.position, interpolation);
       this.dummy.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), bolt.velocity.clone().normalize());
-      this.dummy.scale.set(1, 1, 1); this.dummy.updateMatrix();
+      this.dummy.scale.set(bolt.owner.startsWith('turret-')?2.8:1, bolt.owner.startsWith('turret-')?2.8:1, bolt.owner.startsWith('turret-')?2.2:1); this.dummy.updateMatrix();
       if (bolt.team === 'republic') this.republicBolts.setMatrixAt(republic++, this.dummy.matrix);
       else this.enemyBolts.setMatrixAt(enemy++, this.dummy.matrix);
     }
     this.republicBolts.count = republic; this.enemyBolts.count = enemy;
     this.republicBolts.instanceMatrix.needsUpdate = true; this.enemyBolts.instanceMatrix.needsUpdate = true;
+    world.turrets.forEach((turret,i)=>{
+      const head=this.turretHeads[i]!;head.position.copy(turret.position);
+      head.rotation.y=Math.atan2(-turret.direction.x,-turret.direction.z);
+      head.getObjectByName('barrels')!.rotation.x=Math.asin(THREE.MathUtils.clamp(turret.direction.y,-1,1));
+      this.dummy.position.copy(turret.position);this.dummy.position.y-=5;this.dummy.quaternion.identity();this.dummy.scale.setScalar(1);this.dummy.updateMatrix();this.turretBases.setMatrixAt(i,this.dummy.matrix);
+      const flash=this.turretFlashes[i]!;flash.position.copy(turret.position).addScaledVector(turret.direction,38);flash.visible=turret.flash>0;
+    });
+    this.turretBases.instanceMatrix.needsUpdate=true;
     for (let i = this.flashes.length - 1; i >= 0; i--) {
       const flash = this.flashes[i]!; flash.life -= dt;
       flash.mesh.scale.setScalar(flash.size * (1 - flash.life / flash.duration) + 0.2);
@@ -98,16 +121,15 @@ export class FlightScene {
       if (flash.life <= 0) { this.scene.remove(flash.mesh); this.flashPool.push(flash.mesh); this.flashes.splice(i, 1); }
     }
     const p = world.player;
-    const desired = new THREE.Vector3(0, 4.8, 22).applyQuaternion(p.rotation).add(p.position);
-    const obstruction = world.hullHit(p.position, desired);
-    if (obstruction) desired.copy(p.position).lerp(desired, Math.max(0.08, (obstruction.distance - 2) / p.position.distanceTo(desired)));
     const targetUp = new THREE.Vector3(0, 1, 0).applyQuaternion(p.rotation);
+    const desired = safeChaseCamera(world,new THREE.Vector3(0, 4.8, 22).applyQuaternion(p.rotation).add(p.position));
+    if(this.collisionVersion!==world.playerCollisionVersion){this.ready=false;this.collisionVersion=world.playerCollisionVersion;}
     if (!this.ready) { this.camera.position.copy(desired); this.camera.up.copy(targetUp); }
     else if (dt > 0) {
       this.camera.position.lerp(desired, 1 - Math.exp(-dt * 9));
       this.camera.up.lerp(targetUp, 1 - Math.exp(-dt * 7)).normalize();
       const cameraHit = world.hullHit(p.position, this.camera.position);
-      if (cameraHit) this.camera.position.lerpVectors(p.position, this.camera.position, Math.max(0.02, (cameraHit.distance - 2) / p.position.distanceTo(this.camera.position)));
+      if (cameraHit || this.camera.position.distanceTo(p.position)<p.radius+6) this.camera.position.copy(desired);
     }
     this.camera.lookAt(p.position.clone().addScaledVector(world.forward(p), 100));
     this.camera.updateMatrixWorld(); this.ready = true;
@@ -125,7 +147,7 @@ export class FlightScene {
     for (const group of this.ships.values()) { this.scene.remove(group); disposeModel(group); }
     this.ships.clear();
     for (const flash of this.flashes) { this.scene.remove(flash.mesh); this.flashPool.push(flash.mesh); }
-    this.flashes.length = 0; this.ready = false;
+    this.flashes.length = 0; this.ready = false; this.collisionVersion=-1;
   }
 
   dispose() {
@@ -140,7 +162,7 @@ export class FlightScene {
     this.flashGeometry.dispose();
     for (const mesh of this.flashPool) (mesh.material as THREE.Material).dispose();
     this.flashPool.length = 0;
-    this.republicBolts.dispose(); this.enemyBolts.dispose();
+    this.republicBolts.dispose(); this.enemyBolts.dispose(); this.turretBases.dispose();
     geometry.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); this.renderer.dispose();
   }
 
@@ -150,5 +172,5 @@ export class FlightScene {
 }
 
 export function fighterLabel(f: Fighter) {
-  return f.id === 'player' ? '绝地座机' : f.team === 'republic' ? `苍鹭 ${f.id.endsWith('1') ? '一' : '二'}号` : `秃鹫 ${f.id.split('-').at(-1)}`;
+  return f.id === 'player' ? '绝地座机' : f.team === 'republic' ? `苍鹭 ${f.id.split('-')[1]}号` : `秃鹫 ${f.id.split('-').at(-1)}`;
 }

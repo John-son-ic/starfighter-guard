@@ -3,7 +3,7 @@ import { box, cylinder, mesh, plate, wedge, type Finish, type HullPoint } from '
 import { armorBlock, loft, strut } from './venator-geometry.ts';
 
 /** Exterior authored against the user's three-quarter Venator reference. */
-export function addVenatorDetail(g: Group, p: Finish) {
+export function addVenatorDetail(g: Group, p: Finish, includeTurrets = true) {
   const armor = new MeshStandardMaterial({ color: 0x94968f, roughness: 0.92, metalness: 0.18 });
   const windows = new MeshStandardMaterial({ color: 0xbad6d3, emissive: 0x6b9192, emissiveIntensity: 0.55 });
   let seed = 19016;
@@ -110,6 +110,7 @@ export function addVenatorDetail(g: Group, p: Finish) {
     for(let i=0;i<4;i++) {
       const x=side*(111+i*17),z=142+i*57;
       well(x,z,29,40);
+      if(!includeTurrets)continue;
       cylinder(g,p.trim,9,3,[x,31,z]).rotation.x=Math.PI/2;
       block(17,6,18,x,35,z,p.hull);
       block(13,2,13,x,39,z+1,p.light);
