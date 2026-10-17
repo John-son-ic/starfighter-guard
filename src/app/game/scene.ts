@@ -1,3 +1,5 @@
+import {RelayWorld} from './relay-world.ts';
+import {createRelayModel} from '../../visual/models/relay.ts';
 import {createMunificentModel} from '../../visual/models/munificent.ts';
 import { PlayerExhaust } from './exhaust.ts';
 import * as THREE from 'three';
@@ -16,6 +18,11 @@ export class FlightScene {
   readonly renderer: THREE.WebGLRenderer;
   readonly carrier = createVenatorModel(false,true);
   readonly frigate = createMunificentModel(false);
+  readonly relayStation=createRelayModel(true);
+  readonly debris=new THREE.Group();
+  private extractionBeacon=new THREE.Mesh(new THREE.TorusGeometry(100,1.6,6,48),new THREE.MeshBasicMaterial({color:0x72dfff,transparent:true,opacity:.75}));
+  private relayFires:THREE.Mesh[]=[];
+  private relayFxTime=0;
   readonly secondFrigate = createMunificentModel(false);
   private secondEffects!: {barrier: THREE.Mesh; particles: THREE.Points; relay: THREE.Mesh; bridge: THREE.Mesh};
   private barrier = new THREE.Mesh(new THREE.SphereGeometry(1,32,20),new THREE.ShaderMaterial({uniforms:{time:{value:0}},transparent:true,depthWrite:false,side:THREE.DoubleSide,
@@ -58,7 +65,10 @@ export class FlightScene {
     this.scene.add(new THREE.HemisphereLight(0xb7d8ee, 0x152638, 1.3));
     const light = new THREE.DirectionalLight(0xffedcf, 2.8); light.position.set(-1600, 2200, -900); this.scene.add(light);
     const rim = new THREE.DirectionalLight(0x436c9c, 1.2); rim.position.set(600, -500, 1200); this.scene.add(rim);
-    this.scene.add(this.playerShield,this.capitalEffects.root);
+    this.scene.add(this.playerShield,this.capitalEffects.root,this.relayStation,this.debris,this.extractionBeacon);
+    const rockGeometry=new THREE.IcosahedronGeometry(1,1),rockMaterial=new THREE.MeshStandardMaterial({color:0x47525b,roughness:1,flatShading:true});
+    for(let i=0;i<14;i++){const rock=new THREE.Mesh(rockGeometry,rockMaterial);rock.position.set((i%2?1:-1)*(350+i%4*95),-70+i%3*170,450-i*180);rock.scale.setScalar(22+i%5*8);rock.rotation.set(i*.7,i*.4,i);this.debris.add(rock);}
+    for(let i=0;i<3;i++){const fire=new THREE.Mesh(new THREE.IcosahedronGeometry(1,1),new THREE.MeshBasicMaterial({color:0xffa05c,transparent:true,opacity:.7,depthWrite:false,blending:THREE.AdditiveBlending}));this.relayFires.push(fire);this.scene.add(fire);}
     this.scene.add(this.carrier, this.exhaust.root,this.frigate,this.barrier,this.relay,this.bridgeBeacon);
     const particlePositions=new Float32Array(900*3);
     for(let i=0;i<900;i++){const y=1-2*(i+.5)/900,a=i*2.399963,r=Math.sqrt(1-y*y);particlePositions.set([r*Math.cos(a)*260,y*150,r*Math.sin(a)*470],i*3);}
@@ -128,12 +138,26 @@ export class FlightScene {
   render(world: FlightWorld, dt: number, interpolation = 1) {
     this.shieldPulse=Math.max(0,this.shieldPulse-dt*2.5);
     this.bounceTime=Math.max(0,this.bounceTime-dt);
-    this.capitalEffects.update(world,dt);
+    const relay=world instanceof RelayWorld?world:null;
+    this.relayStation.visible=this.debris.visible=!!relay;
+    this.extractionBeacon.visible=relay?.operation.phase==='escape';
+    if(relay){
+      const open=relay.operation.phase==='reactor'?Math.min(1,relay.operation.phaseTime/2):['escape','won','lost'].includes(relay.operation.phase)&&relay.control.health<=0?1:0;
+      for(let i=0;i<2;i++){const door=this.relayStation.getObjectByName('relay-door-'+i)!;door.position.x=door.userData.closedX+(i?1:-1)*open*120;}
+      this.relayStation.updateMatrixWorld(true);
+      this.extractionBeacon.position.copy(relay.extraction);this.extractionBeacon.quaternion.copy(this.camera.quaternion);
+      this.carrier.visible=relay.rescueActive;
+      this.carrier.scale.set(1,1,relay.rescueActive?1+(1-relay.rescueProgress)*1.8:1);
+      this.carrier.position.copy(relay.rescuePosition);if(relay.rescueActive)this.carrier.position.z+=Math.pow(1-relay.rescueProgress,3)*14000;
+      if(relay.operation.phase==='escape'&&dt>0){this.relayFxTime+=dt;if(this.relayFxTime>.65){this.relayFxTime=0;const n=Math.floor(world.time*7);this.consume([{type:'explosion',position:this.relayStation.position.clone().add(new THREE.Vector3(Math.sin(n)*240,70,Math.cos(n)*260)),enemy:true,size:40}]);}}
+    } else {this.carrier.visible=true;this.carrier.scale.setScalar(1);this.carrier.position.set(0,0,0);this.capitalEffects.update(world,dt);}
+    this.capitalEffects.root.visible=!relay;
+    this.relayFires.forEach((f,i)=>{f.visible=!!relay&&relay.facilities[i]!.health<=0;if(relay){f.position.copy(relay.facilities[i]!.position);f.position.y+=12;f.scale.set(18,35+Math.sin(world.time*9+i)*7,18);}});
     for(const [index,ship] of world.capitalShips.entries()) {
       const model=index===0?this.frigate:this.secondFrigate;
       const fx=index===0?{barrier:this.barrier,particles:this.shieldParticles,relay:this.relay,bridge:this.bridgeBeacon}:this.secondEffects;
       const deathAge=this.capitalEffects.deathAges[index]!;
-      model.visible=world.stage!=='defense'&&(!ship.destroyed||deathAge<4);
+      model.visible=!relay&&world.stage!=='defense'&&(!ship.destroyed||deathAge<4);
       model.position.copy(ship.position);
       model.rotation.z=ship.destroyed?deathAge*.05:0;
       if(ship.destroyed)model.position.y-=deathAge*18;
@@ -178,16 +202,17 @@ export class FlightScene {
     this.republicBolts.count = republic; this.enemyBolts.count = enemy;
     this.republicBolts.instanceMatrix.needsUpdate = true; this.enemyBolts.instanceMatrix.needsUpdate = true;
     world.turrets.forEach((turret,i)=>{
-      const head=this.turretHeads[i]!;head.position.copy(turret.position);
+      const head=this.turretHeads[i]!;head.visible=this.carrier.visible&&(!relay||relay.rescueProgress>=1);head.position.copy(turret.position);
       head.rotation.y=Math.atan2(-turret.direction.x,-turret.direction.z);
       head.getObjectByName('barrels')!.rotation.x=Math.asin(THREE.MathUtils.clamp(turret.direction.y,-1,1));
       this.dummy.position.copy(turret.position);this.dummy.position.y-=5;this.dummy.quaternion.identity();this.dummy.scale.setScalar(1);this.dummy.updateMatrix();this.turretBases.setMatrixAt(i,this.dummy.matrix);
-      const flash=this.turretFlashes[i]!;flash.position.copy(turret.position).addScaledVector(turret.direction,38);flash.visible=turret.flash>0;
+      const flash=this.turretFlashes[i]!;flash.position.copy(turret.position).addScaledVector(turret.direction,38);flash.visible=head.visible&&turret.flash>0;
     });
-    this.turretBases.instanceMatrix.needsUpdate=true;
+    this.turretBases.visible=this.carrier.visible&&(!relay||relay.rescueProgress>=1);this.turretBases.instanceMatrix.needsUpdate=true;
+    this.enemyHeads.forEach(h=>h.visible=false);this.enemyFlashes.forEach(f=>f.visible=false);
     world.enemyGuns.forEach((gun,i)=>{
       const head=this.enemyHeads[i]!,flash=this.enemyFlashes[i]!;
-      head.visible=world.stage!=='defense'&&world.stage!=='arrival'&&world.stage!=='destroyed'&&gun.health>0;
+      head.visible=relay?gun.health>0:world.stage!=='defense'&&world.stage!=='arrival'&&world.stage!=='destroyed'&&gun.health>0;
       head.position.copy(gun.position);head.rotation.y=Math.atan2(-gun.direction.x,-gun.direction.z);
       head.getObjectByName('barrels')!.rotation.x=Math.asin(THREE.MathUtils.clamp(gun.direction.y,-1,1));
       flash.visible=head.visible&&gun.flash>0;flash.position.copy(gun.position).addScaledVector(gun.direction,30);
@@ -227,7 +252,7 @@ export class FlightScene {
   }
 
   reset() {
-    this.shieldPulse=this.bounceTime=0;
+    this.shieldPulse=this.bounceTime=this.relayFxTime=0;
     this.capitalEffects.reset();
     this.exhaust.reset();
     for (const group of this.ships.values()) { this.scene.remove(group); disposeModel(group); }
@@ -260,6 +285,8 @@ export class FlightScene {
 }
 
 export function fighterLabel(f: Fighter) {
+  if(f.id==='relay-comms')return '通讯阵列';if(f.id==='relay-control')return '火控中心';if(f.id==='relay-core')return '反应堆';
+  if(f.id.startsWith('relay-gun-'))return '中继站近防炮 '+f.id.split('-').at(-1);
   if(isEnemyGun(f)) return CAPITAL_ROLES[f.shipIndex as 0 | 1].name+' '+(f.heavy?'重型主炮':'近防炮')+' '+f.id.split('-').at(-1);
   if(f.id.startsWith('shield-generator')) return CAPITAL_ROLES[f.id.endsWith('-2')?1:0].name+' 护盾发生器';
   if(f.id.startsWith('frigate-bridge')) return CAPITAL_ROLES[f.id.endsWith('-2')?1:0].name+' 舰桥';

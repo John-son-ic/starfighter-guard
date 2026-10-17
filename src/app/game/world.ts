@@ -28,13 +28,13 @@ export interface TacticalAlert { id: string; text: string; subjectId: string; po
 export interface Bolt { capital?: boolean; targetId?: string; id: number; team: Fighter['team']; owner: string; position: THREE.Vector3; previous: THREE.Vector3; velocity: THREE.Vector3; life: number; damage: number }
 export interface CarrierTurret { id: string; position: THREE.Vector3; direction: THREE.Vector3; cooldown: number; flash: number; targetId: string | null; aim: THREE.Vector3 | null; scanAt: number }
 export type WorldEvent = { type: 'explosion' | 'impact' | 'player-hit' | 'shot' | 'carrier-shot' | 'warning' | 'torpedo-launch' | 'torpedo-hit' | 'kill' | 'shield-hit' | 'shield-bounce'; position: THREE.Vector3; enemy: boolean; size?: number; normal?: THREE.Vector3 };
-interface AssaultCheckpoint {
+export interface FlightCheckpoint {
   fighters: Fighter[]; mission: MissionState; turrets: CarrierTurret[];
   time: number; carrierHealth: number; turretShots: number; boltSequence: number;
   boostEnergy: number; jumpCooldown: number; shieldTime: number; shieldCooldown: number;
   torpedoCooldowns: number[]; wingOrder: 'guard' | 'focus' | 'follow'; focusId: string | null;
 }
-function copyFighter(f: Fighter): Fighter {
+export function copyFighter(f: Fighter): Fighter {
   return {...f,position:f.position.clone(),previous:f.position.clone(),rotation:f.rotation.clone(),weapon:{...f.weapon}};
 }
 function copyTurret(t: CarrierTurret): CarrierTurret {
@@ -48,7 +48,7 @@ export const WEAK_POINT = new THREE.Vector3(145, -38, 210);
 const PROJECTILE_SPEED = 720;
 const PROJECTILE_LIFETIME = 2;
 
-function fighter(id: string, model: ModelId, team: Fighter['team'], position: THREE.Vector3, health: number): Fighter {
+export function createFighter(id: string, model: ModelId, team: Fighter['team'], position: THREE.Vector3, health: number): Fighter {
   return { id, model, team, position, previous: position.clone(), rotation: new THREE.Quaternion(), speed: model === 'eta2' ? 115 : 110, health, maxHealth: health, radius: model === 'arc170' ? 7 : 3, weapon: createWeapon(), cooldown: 0, evadingUntil: 0, phase: 0, invulnerable: 0 };
 }
 
@@ -76,7 +76,7 @@ export class FlightWorld {
   readonly enemyGuns: EnemyGun[] = [];
   private alerts: TacticalAlert[] = [];
   private nextWarningSound = 0;
-  private checkpoint: AssaultCheckpoint | null = null;
+  private checkpoint: FlightCheckpoint | null = null;
   get hasCheckpoint() { return this.checkpoint !== null; }
   get checkpointInfo() {
     const c=this.checkpoint;
@@ -84,10 +84,10 @@ export class FlightWorld {
   }
 
   /** One session-only snapshot, captured once after the last defense wave. */
-  private saveAssaultCheckpoint() {
+  protected captureFlightCheckpoint(includeEnemies=false): FlightCheckpoint {
     this.bolts.length=0; // The completed wave leaves no stray rounds in the new stage.
     this.torpedoLock=0;this.torpedoTarget=null;this.targetId=null;
-    this.checkpoint={fighters:this.fighters.filter(f=>f.team==='republic'&&f.health>0).map(copyFighter),mission:structuredClone(this.mission),
+    return {fighters:this.fighters.filter(f=>(includeEnemies||f.team==='republic')&&f.health>0).map(copyFighter),mission:structuredClone(this.mission),
       turrets:this.turrets.map(copyTurret),time:this.time,carrierHealth:this.carrierHealth,turretShots:this.turretShots,boltSequence:this.boltSequence,
       boostEnergy:this.boostEnergy,jumpCooldown:this.jumpCooldown,shieldTime:this.shieldTime,shieldCooldown:this.shieldCooldown,
       torpedoCooldowns:[...this.torpedoCooldowns],wingOrder:this.wingOrder,focusId:this.focusId};
@@ -97,16 +97,22 @@ export class FlightWorld {
     const c=this.checkpoint;
     if(!c||this.mission.phase!=='lost')return null;
     const restored=new FlightWorld(this.carrier,...this.capitalShips.map(s=>s.model) as [THREE.Group,THREE.Group]);
+    restored.restoreFlightCheckpoint(c);
+    restored.stage='arrival';restored.stageTime=0;
+    restored.checkpoint=c;restored.message='已返回敌舰来袭检查点 · 当时的损伤与僚机状态已保留。';
+    return restored;
+  }
+  protected restoreFlightCheckpoint(c:FlightCheckpoint) {
+    const restored=this;
     Object.assign(restored.player,copyFighter(c.fighters[0]!));
     restored.fighters.splice(0,restored.fighters.length,restored.player,...c.fighters.slice(1).map(copyFighter));
-    restored.mission=structuredClone(c.mission);restored.stage='arrival';restored.stageTime=0;
+    restored.mission=structuredClone(c.mission);
     restored.turrets.splice(0,restored.turrets.length,...c.turrets.map(copyTurret));
     restored.time=c.time;restored.carrierHealth=c.carrierHealth;restored.turretShots=c.turretShots;restored.boltSequence=c.boltSequence;
     restored.boostEnergy=c.boostEnergy;restored.jumpCooldown=c.jumpCooldown;restored.shieldTime=c.shieldTime;restored.shieldCooldown=c.shieldCooldown;
     restored.torpedoCooldowns.splice(0,2,...c.torpedoCooldowns);restored.wingOrder=c.wingOrder;restored.focusId=c.focusId;
-    restored.checkpoint=c;restored.message='已返回敌舰来袭检查点 · 当时的损伤与僚机状态已保留。';
-    return restored;
   }
+  get checkpointTitle() {return '敌舰来袭';}
   get threats() { return this.terminal ? [] : this.alerts.filter(a => a.expires > this.time).sort((a,b) => Number(b.id.startsWith('gold-')) - Number(a.id.startsWith('gold-'))); }
 
   private warn(id: string, text: string, subjectId: string, position: THREE.Vector3, owner: string) {
@@ -148,7 +154,7 @@ export class FlightWorld {
   get objectives() { return this.stage === 'defense' || this.stage === 'arrival' || this.stage === 'destroyed' ? [] : this.capitalShips.filter(s=>!s.destroyed).map(s=>s.generator.health>0?s.generator:s.bridge).filter(f=>f.health>0); }
   get attackTargets() { return [...this.enemies, ...this.objectives,...this.exposedGuns]; }
   get bombers() { return this.fighters.filter(f=>f.model==='ywing'&&f.health>0); }
-  get objectiveText() {
+  get objectiveText():string {
     if(this.stage==='defense') return '清除三波敌机 · 守住狩猎者级';
     if(this.stage==='arrival') return '警报：两艘慷慨级正在跃迁进入战场';
     if(this.stage==='shield') return '击毁外露护盾发生器 · 舰体受屏障保护';
@@ -181,7 +187,7 @@ export class FlightWorld {
   message = '编队集结。敌方机群正在接近。';
   hitFlash = 0;
   hitConfirm = 0;
-  private boltSequence = 0;
+  protected boltSequence = 0;
   private ray = new THREE.Raycaster();
   private carrierBounds: THREE.Box3;
 
@@ -193,10 +199,10 @@ export class FlightWorld {
       model.position.copy(position);model.scale.setScalar(1);model.rotation.set(0,Math.PI,0);model.updateMatrixWorld(true);
       const point=(key:string)=>new THREE.Vector3().fromArray(model.userData[key]).applyMatrix4(model.matrixWorld);
       const suffix=index===0?'':'-2';
-      const generator=fighter('shield-generator'+suffix,'munificent','separatist',point('generator'),360);generator.radius=28;generator.speed=0;
-      const bridge=fighter('frigate-bridge'+suffix,'munificent','separatist',point('bridge'),1800);bridge.radius=44;bridge.speed=0;
+      const generator=createFighter('shield-generator'+suffix,'munificent','separatist',point('generator'),360);generator.radius=28;generator.speed=0;
+      const bridge=createFighter('frigate-bridge'+suffix,'munificent','separatist',point('bridge'),1800);bridge.radius=44;bridge.speed=0;
       const guns=(model.userData.gunMounts as number[][]).map((mount,i)=>{
-        const gun=fighter('enemy-gun-'+(index*6+i+1),'munificent','separatist',new THREE.Vector3().fromArray(mount).applyMatrix4(model.matrixWorld),150);
+        const gun=createFighter('enemy-gun-'+(index*6+i+1),'munificent','separatist',new THREE.Vector3().fromArray(mount).applyMatrix4(model.matrixWorld),150);
         gun.radius=20;gun.speed=0;gun.cooldown=.4+i*.6+index;
         return {...gun,direction:new THREE.Vector3(0,0,1),flash:0,heavy:i%3===0,shipIndex:index};
       });
@@ -206,8 +212,8 @@ export class FlightWorld {
     this.generator=this.capitalShips[0]!.generator;this.bridge=this.capitalShips[0]!.bridge;
     carrier.updateMatrixWorld(true);
     this.carrierBounds = new THREE.Box3().setFromObject(carrier);
-    this.player = fighter('player', 'eta2', 'republic', new THREE.Vector3(110, 95, 300), 100);
-    this.fighters = [this.player, ...Array.from({length:MVP_CONFIG.friendlies},(_,i)=>fighter(`wing-${i+1}`, 'arc170', 'republic', new THREE.Vector3(110 + (i%2===0?-1:1)*(48+Math.floor(i/2)*40), 107+Math.floor(i/2)*15, 242-Math.floor(i/2)*36), 120))];
+    this.player = createFighter('player', 'eta2', 'republic', new THREE.Vector3(110, 95, 300), 100);
+    this.fighters = [this.player, ...Array.from({length:MVP_CONFIG.friendlies},(_,i)=>createFighter(`wing-${i+1}`, 'arc170', 'republic', new THREE.Vector3(110 + (i%2===0?-1:1)*(48+Math.floor(i/2)*40), 107+Math.floor(i/2)*15, 242-Math.floor(i/2)*36), 120))];
     for (const side of [-1,1]) for(let i=0;i<4;i++) this.turrets.push({id:`turret-${side}-${i}`,position:new THREE.Vector3(side*(111+i*17),-18.25,142+i*57),direction:FORWARD.clone(),cooldown:0.3+i*0.3+(side+1)*0.1,flash:0,targetId:null,aim:null,scanAt:i*0.04});
   }
 
@@ -300,7 +306,7 @@ export class FlightWorld {
     this.mission = result.state;
     if(this.mission.phase==='won') {
       this.stage='arrival';this.stageTime=0;this.mission={...this.mission,phase:'combat'};
-      this.saveAssaultCheckpoint();
+      this.checkpoint=this.captureFlightCheckpoint();
       this.message='检查点已记录 · 大型跃迁信号！前方5000米出现敌舰。';
     }
     for (const event of result.events) {
@@ -308,7 +314,7 @@ export class FlightWorld {
         event.enemyIds.forEach((id, i) => {
           const slot = i%5, row = Math.floor(i/5);
           const flank = event.waveIndex%2 ? -1 : 1;
-          const f = fighter(id, 'vulture', 'separatist', new THREE.Vector3(flank*(-320 + slot*150), 135+row*65+slot*12, -780-row*160-slot*30), 90);
+          const f = createFighter(id, 'vulture', 'separatist', new THREE.Vector3(flank*(-320 + slot*150), 135+row*65+slot*12, -780-row*160-slot*30), 90);
           f.rotation.setFromAxisAngle(Y, Math.PI); f.phase = i + event.waveIndex; f.cooldown = i * 0.4;
           this.fighters.push(f);
         });
@@ -325,7 +331,7 @@ export class FlightWorld {
   }
 
   targetSurface(target: Fighter,origin:THREE.Vector3) {
-    return target.model==='munificent' ? target.position.clone().addScaledVector(origin.clone().sub(target.position).normalize(),target.radius+1) : target.position;
+    return (target.model==='munificent'||target.model==='relay') ? target.position.clone().addScaledVector(origin.clone().sub(target.position).normalize(),target.radius+1) : target.position;
   }
   muzzlePosition(f: Fighter) { return f.position.clone().addScaledVector(this.forward(f), f.radius + 3); }
 
@@ -487,7 +493,7 @@ export class FlightWorld {
     this.message='短程跃迁完成 · '+Math.round(distance)+' 米';this.events.push({type:'carrier-shot',position:p.position.clone(),enemy:false});return true;
   }
 
-  private updateEnemyGuns(dt:number) {
+  protected updateEnemyGuns(dt:number) {
     if(this.stage==='defense'||this.stage==='arrival'||this.stage==='destroyed')return;
     for(const gun of this.enemyGuns){
       gun.flash=Math.max(0,gun.flash-dt);if(gun.health<=0)continue;gun.cooldown-=dt;
@@ -511,7 +517,7 @@ export class FlightWorld {
     }
   }
 
-  private updateTurrets(dt: number) {
+  protected updateTurrets(dt: number) {
     for(const turret of this.turrets) {
       turret.cooldown-=dt; turret.flash=Math.max(0,turret.flash-dt);
       if(this.stage!=='defense'&&this.stage!=='arrival'&&this.stage!=='destroyed') {
@@ -583,7 +589,7 @@ export class FlightWorld {
   }
   shieldContact(start: THREE.Vector3,end: THREE.Vector3) {return this.shieldShip(start,end)?.t??null;}
 
-  private updateAssault(dt: number) {
+  protected updateAssault(dt: number) {
     if(this.player.health<=0||this.carrierHealth<=0){this.mission={...this.mission,phase:'lost',lossReason:this.player.health<=0?'player-destroyed':'carrier-destroyed'};return;}
     this.stageTime+=dt;
     if(this.stage==='arrival') {
@@ -602,7 +608,7 @@ export class FlightWorld {
           const i=ship.launched++,isBomber=i===0;
           const exit=new THREE.Vector3().fromArray(this.carrier.userData.hangarExit??[0,25,-150]);
           exit.x+=(index===0?-1:1)*20;exit.y+=10;
-          const f=fighter(isBomber?'gold-'+(index+1):'wing-'+(5+index*2+i-1),isBomber?'ywing':'arc170','republic',exit,isBomber?320:120);
+          const f=createFighter(isBomber?'gold-'+(index+1):'wing-'+(5+index*2+i-1),isBomber?'ywing':'arc170','republic',exit,isBomber?320:120);
           f.radius=isBomber?9:7;f.phase=index;f.evadingUntil=this.time+4;this.fighters.push(f);
         }
       }
@@ -619,7 +625,7 @@ export class FlightWorld {
       this.reinforcementTimer=22;
       for(const ship of this.capitalShips.filter(s=>!s.destroyed))for(let i=0;i<CAPITAL_ROLES[ship.role].reinforcements&&this.enemies.length<10;i++) {
         const id=++this.reinforcementSequence;
-        const f=fighter('interceptor-'+id,'vulture','separatist',ship.position.clone().add(new THREE.Vector3((i-.5)*150,230,550)),90);
+        const f=createFighter('interceptor-'+id,'vulture','separatist',ship.position.clone().add(new THREE.Vector3((i-.5)*150,230,550)),90);
         f.rotation.setFromAxisAngle(Y,Math.PI);f.phase=id;this.fighters.push(f);
       }
     }

@@ -1,3 +1,4 @@
+import {createRelayModel} from './relay.ts';
 import {createMunificentModel} from './munificent.ts';
 import {createYWingModel} from './ywing.ts';
 import type { Group } from 'three';
@@ -8,6 +9,7 @@ import { createArc170Model } from './arc170.ts';
 import { createVultureModel } from './vulture.ts';
 
 export const MODEL_CATALOG: Record<ModelId, { name: string; english: string; role: string; length: number; factory: () => Group; features: readonly string[] }> = {
+  relay: {name:'分离主义通讯中继站',english:'SEPARATIST RELAY',role:'断链行动 / 敌方空间设施',length:900,factory:createRelayModel,features:['通讯碟阵列','火控中心','反应堆装甲门','模块化外环']},
   munificent: { name:'慷慨级护卫舰',english:'MUNIFICENT-CLASS',role:'分离势力 / 敌方旗舰',length:825,factory:createMunificentModel,features:['骨架舰身','双反应堆','前部舰桥','护盾投射节点'] },
   ywing: { name:'Y翼轰炸机',english:'BTL-B Y-WING',role:'共和国 / 轰炸编队',length:23.4,factory:createYWingModel,features:['双引擎','长尾支架','重型鱼雷','护航目标'] },
   venator: { name: '狩猎者级', english: 'VENATOR-CLASS', role: '共和国主力舰 / 作战母舰', length: 1155, factory: createVenatorModel, features: ['楔形舰体', '双舰桥', '背部机库门', '引擎阵列'] },

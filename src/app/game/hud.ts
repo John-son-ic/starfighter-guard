@@ -1,3 +1,4 @@
+import {RelayWorld} from './relay-world.ts';
 import type { FlightWorld } from './world.ts';
 import type { FlightScene } from './scene.ts';
 import { fighterLabel } from './scene.ts';
@@ -118,13 +119,16 @@ export class TacticalHUD {
       text(marker.distance, ` ${Math.round(distance / (selected ? 1 : 10)) * (selected ? 1 : 10)} m`);
       marker.health.style.width = `${Math.max(0, fighter.health / fighter.maxHealth * 100)}%`;
     }
-    const homePoint = scene.project(world.carrier.position);
+    const homePosition=world instanceof RelayWorld?(world.operation.phase==='escape'?world.extraction:world.station.position):world.carrier.position;
+    text(this.home.label,world instanceof RelayWorld?(world.operation.phase==='escape'?'撤离点':'通讯中继站'):'守望号');
+    const homePoint = scene.project(homePosition);
+    this.home.root.hidden=world instanceof RelayWorld&&!['approach','escape'].includes(world.operation.phase);
     this.home.root.className = `ship-marker home-marker ${homePoint.visible ? '' : 'offscreen'}`;
-    text(this.home.distance, ` ${Math.round(world.player.position.distanceTo(world.carrier.position))} m`);
+    text(this.home.distance, ` ${Math.round(world.player.position.distanceTo(homePosition))} m`);
     this.position(this.home, homePoint);
     this.home.root.classList.toggle('threatened',world.threats.some(a=>a.subjectId==='home'));
     const purpose=this.readout.querySelector('.target-purpose');
-    if(purpose) text(purpose,target?(isEnemyGun(target)?target.heavy?'拆除主炮 · 减轻母舰压力':'拆除近防 · 保护Y翼与座机':target.id.startsWith('shield-generator')?'破盾后派出 1 Y翼 + 2 护航机':target.id.startsWith('frigate-bridge')?'护航Y翼 · 重型鱼雷对舰伤害更高':''): '');
+    if(purpose) text(purpose,target?(target.id==='relay-comms'?'摧毁后停止敌机增援':target.id==='relay-control'?'摧毁后关闭空间站防御炮':target.id==='relay-core'?'摧毁后立即沿蓝色航标撤离':target.id.startsWith('relay-gun-')?'拆除近防 · 减轻抵近压力':isEnemyGun(target)?target.heavy?'拆除主炮 · 减轻母舰压力':'拆除近防 · 保护Y翼与座机':target.id.startsWith('shield-generator')?'破盾后派出 1 Y翼 + 2 护航机':target.id.startsWith('frigate-bridge')?'护航Y翼 · 重型鱼雷对舰伤害更高':''): '');
   }
 
   reset() {

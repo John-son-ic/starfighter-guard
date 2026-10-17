@@ -5,6 +5,20 @@
   "up": "+Y",
   "models": [
     {
+      "id": "relay",
+      "file": "relay.glb",
+      "source": "src/visual/models/relay.ts",
+      "lengthMeters": 900,
+      "dimensionsMeters": [
+        730.81201171875,
+        297.3303527832031,
+        900
+      ],
+      "triangles": 4676,
+      "materialBatches": 8,
+      "bytes": 343600
+    },
+    {
       "id": "munificent",
       "file": "munificent.glb",
       "source": "src/visual/models/munificent.ts",

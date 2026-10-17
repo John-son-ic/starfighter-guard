@@ -1,5 +1,25 @@
 # DSH最新报告
 
+## Codex验收更新 / C27
+
+D12已独立审查、重跑39项并纳入完整检查（241项中237通过、4权限跳过），状态改DONE。第二任务实际飞行、建模、UI和生产包由Codex另行验证。观察项均已判定，见docs/reports/codex-20261017-C27-relay.md。无新READY任务，DSH本批停止。
+
+## DSH 最新（2026-10-17 / D12）
+
+第二任务「断链行动」纯状态机回归完成，状态 REVIEW，等待 Codex 审查。本批只新增一个测试文件，未改 `src/**`、未构建、未做 Git 写入。
+
+- 任务：D12（docs/tasks/DSH_RELAY.md），入口 DSH_HANDOFF.md C27
+- 起始Git commit：223479e（执行时 HEAD 未变，Codex 第二任务改动尚未提交）
+- 被测对象：`src/sim/relay-mission.ts`（Codex 维护，已落盘，**未修改**）；类型与常量取 `src/shared/relay-contract.ts`
+- 新增文件：`tests/dsh/relay-mission.test.mjs`（39 个行为用例，唯一新增代码）
+- 报告：docs/reports/dsh-20261017-D12.md
+- 命令 / 退出码 / 用例数：`node --test tests/dsh/relay-mission.test.mjs` → **退出码 0**，tests 39 / pass 39 / fail 0 / skipped 0，约 120ms，连续 3 次一致
+- **未运行 `npm run check`**（任务书要求 Codex 合并时统一执行，DSH 并行期间不构建、不导出资产）——故本快照不代表全仓类型检查/全量测试/资产校验/构建通过
+- 覆盖要点：初态；8/24/60/8/4 常量；dt 与 activeEnemies 校验；approach 条件与 checkpoint 一次；单设施不足；双设施同帧双事件；三目标同帧不跨阶段；24s 增援（2 机/8 上限/满员仍重置计时/不追补）；通讯冻结与恢复续计；反应堆毁后 escape 与追击机补足 4；8s 救援一次；12s 起且 atExtraction 才胜；60s 超时优先（含恰在 60s 到达）；四阶段死亡优先；终态稳定不重发；dt=0 语义；输入与 state 不变；无时钟/DOM/随机/网络（源码扫描）；同种子确定性与有界长序列（上限 100000 步）
+- **执行期间 Codex 修改了被测模块**：`relay-mission.ts` mtime 21:47→21:53，玩家死亡分支增加 `phaseTime:0`，正好修掉我初稿列为「已知问题 1」的两条失败路径不一致；已按最终版本复核并新增断言固定该统一行为。期间一次运行撞上写入中途而短暂非 0，写入完成后连续 3 次全通过
+- 其余待 Codex 决定的观察项：①`reinforcementTime` 也随阶段转换归零（契约只写 `phaseTime`）；②终态仍校验非法 activeEnemies；③reactor 增援分支正常玩法不可达，已用构造状态覆盖 1 例；④边界统一 `+1e-9` 含等号
+- 未验证：未做浏览器/画面/飞行/UI/声音/GPU；未验证 `src/app/game/relay-world.ts` 的 app 集成与事件消费顺序；未跑全仓门槛；被测模块后续若再改动需重跑本文件
+
 ## Codex补充（2026-10-17 / C16）
 
 三波+敌舰突袭已接入，报告docs/reports/codex-20261017-C16-frigate.md。配置及对应回归已由Codex更新：三波24、种子1摘要cebbfa2a、六模型资产/发布测试；完整176通过/4权限跳过。无新DSH任务。下文旧五波/四模型为历史，不覆盖当前MVP。
@@ -78,7 +98,7 @@ D01—D11已审查接受，D08由D11及Codex修正覆盖。详情先读docs/repo
 
 计数口径：Codex 审查已明确 **`npm test` 为唯一用例计数入口**，无需为直接 `node --test` 的发现差异重命名运行器（该差异来自 Node 把 `scripts/test.mjs` 也当测试文件执行）。
 
-全仓 157 用例的构成（实测逐文件计数）：**DSH 贡献 138 项**——D01 20、D02 16、D03 16、D04 11、D05 14、D06 21、D07 16、D09 14、D10 10；其余为基线 3 项与 Codex 的 tests/models.test.mjs 4、tests/flight-world.test.mjs 6、tests/flight-campaign.test.mjs 1、tests/intercept-integration.test.mjs 5。**3 项跳过全部是符号链接用例**（D09 两项、D10 一项），原因是本机权限不允许创建符号链接。
+全仓 157 用例的构成（第四批时点实测逐文件计数；**D12 未重跑全仓，故此为历史数值，未包含 D12 的 39 项**）：**DSH 贡献 138 项**——D01 20、D02 16、D03 16、D04 11、D05 14、D06 21、D07 16、D09 14、D10 10；其余为基线 3 项与 Codex 的 tests/models.test.mjs 4、tests/flight-world.test.mjs 6、tests/flight-campaign.test.mjs 1、tests/intercept-integration.test.mjs 5。**3 项跳过全部是符号链接用例**（D09 两项、D10 一项），原因是本机权限不允许创建符号链接。
 
 ## 关键实现结论
 

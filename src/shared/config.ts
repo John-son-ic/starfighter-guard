@@ -3,7 +3,7 @@ import type { MissionConfig, ModelId, Settings, WeaponConfig } from './types.ts'
 export const MVP_CONFIG = Object.freeze({
   friendlies: 4,
   maxActiveEnemies: 10,
-  models: Object.freeze(['venator', 'eta2', 'arc170', 'vulture', 'munificent', 'ywing'] satisfies ModelId[]),
+  models: Object.freeze(['venator', 'eta2', 'arc170', 'vulture', 'munificent', 'ywing', 'relay'] satisfies ModelId[]),
   playerHealth: 100,
   carrierHealth: 4000,
   fixedStepSeconds: 1 / 60,

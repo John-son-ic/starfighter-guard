@@ -235,5 +235,5 @@ test('the real repository packages (dist only) and the package can be served', a
   const manifest = await fetch(`${origin}/models/manifest.json`);
   assert.equal(manifest.status, 200, 'the packaged model manifest must load locally');
   const models = JSON.parse(await manifest.text());
-  assert.equal(models.models.length, 6);
+  assert.equal(models.models.length, 7);
 });

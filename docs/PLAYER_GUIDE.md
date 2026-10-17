@@ -1,12 +1,12 @@
 # 试玩说明 — 双舰突袭
 
-2026-10-17。当前任务分为三波护舰与敌舰突袭两部分。
+2026-10-17。开始页可选“01 · 余烬航道”或“02 · 断链行动”。暂停或结算页可返回任务选择；切换任务会清除当前进度。本文的三波护舰路线为任务1，第二关详见[MISSION_2.md](MISSION_2.md)。
 
 ## 启动
 
 已安装Node.js 24且目录中有dist时，双击根目录start-play.cmd，打开http://127.0.0.1:5174/。更新后按Ctrl+F5刷新；关闭服务命令窗口即停止。
 
-开发使用start-dev.cmd（第一次npm ci需要网络），地址http://127.0.0.1:5173/。模型页为/?mode=models，提供6种模型与GLB导出。离线包说明见[OFFLINE_RELEASE.md](OFFLINE_RELEASE.md)。
+开发使用start-dev.cmd（第一次npm ci需要网络），地址http://127.0.0.1:5173/。模型页为/?mode=models，提供7种模型与GLB导出。离线包说明见[OFFLINE_RELEASE.md](OFFLINE_RELEASE.md)。
 
 ## 操作
 
