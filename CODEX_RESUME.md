@@ -1,5 +1,7 @@
 # Codex恢复入口
 
+C24 / 2026-10-17：已将C17—C23当前源码/模型/测试存为本地Git提交115384a（不是逐轮中间快照）。清理历史测试产物约2.04GiB；保留测试源码、node_modules、dist、public及建模资料。旧报告的截图/便携包路径可能已清理，见artifacts/README.md和docs/reports/codex-20261017-C24-cleanup.md。无DSH新READY任务。
+
 C23 / 2026-10-17：F主动护盾5秒、开启起30秒冷却，敌方激光免伤、撞母舰/敌舰安全弹开；左下角状态和蓝色薄膜。完整检查186通过/4权限跳过，实际浏览器F键及撞舰/暂停/重开通过，dist更新。报告docs/reports/codex-20261017-C23-player-shield.md，无DSH新READY。
 
 C22 / 2026-10-17：两枚质子鱼雷独立18秒冷却，每次重新锁定2秒，右下角双状态。完整检查184通过/4权限跳过，两次实际R键与截图验证通过，dist更新。报告docs/reports/codex-20261017-C22-dual-torpedo.md。

@@ -13,3 +13,7 @@ Thumbs.db
 .idea/
 .vscode/
 artifacts/local/
+
+# Generated visual QA screenshots, browser profiles, logs and test builds
+/artifacts/*
+!/artifacts/README.md

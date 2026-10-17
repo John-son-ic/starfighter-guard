@@ -6,6 +6,8 @@
 
 双击start-play.cmd打开已构建试玩版，页面Ctrl+F5刷新。当前说明见[docs/PLAYER_GUIDE.md](docs/PLAYER_GUIDE.md)，完整范围见[docs/MVP.md](docs/MVP.md)。真人难度与设备帧率仍待试玩。
 
+清理说明：历史验证截图和临时试玩包已按用户要求删除；保留源码、模型、自动化测试与当前dist。旧报告中的产物路径可能失效，详见[artifacts/README.md](artifacts/README.md)。
+
 ## 给使用者
 
 1. 把**本目录**作为Codex和DSH的项目目录。
