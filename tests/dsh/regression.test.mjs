@@ -398,7 +398,7 @@ test('the recorded seed-1 digest matches the current implementation', () => {
   // C07 wave table and combat-only incoming fire; see codex-20261016-C07-battle.md.
   // If a DSH module changes how a seeded run plays out, this must fail and the new
   // digest has to be justified in the report instead of silently re-recorded.
-  const RECORDED_SEED_1 = '84e96e70';
+  const RECORDED_SEED_1 = 'cebbfa2a';
   const run = runMission({ seed: 1 });
   const digest = run.digest;
   assert.match(digest, /^[0-9a-f]{8}$/, 'the digest must be an 8-hex-digit string');

@@ -13,3 +13,6 @@
 primitives.ts用挤压轮廓、楔形、低段数球/柱等生成几何，finalize按材质合并成6—7个网格批次，再统一居中并校准长度。无纹理、无骨骼。建模时只统一校准长度，不宣称所有尺寸精确符合正史。
 
 执行npm run models:export可更新public/models下的GLB。运行时可选工厂直接生成或GLTFLoader加载GLB，不要同时实例化两份。C02会另做简化碰撞形状，不应用完整视觉网格逐三角计算所有AI避障。
+
+
+2026-10-17 / C16：新增munificent.ts与ywing.ts，共6种模型。慷慨级4204面/8批次，Y翼896面/6批次。createVenatorModel(false,true)为游戏拆分动态双门，默认导出仍为静态合并模型；hangarExit及弱点定位经居中/尺度转换写入userData。模型预览、游戏截图和限制见C16报告。

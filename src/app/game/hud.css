@@ -5,3 +5,28 @@
 .target-readout{padding:9px 12px;background:linear-gradient(100deg,#030a13c9,#030a1366);border-left:1px solid #c6a46a55;border-radius:2px}.wing-panel,.carrier-panel{padding:12px;background:linear-gradient(110deg,#030a13cc,#030a1355);border-radius:3px}.telemetry{padding:16px 12px 10px;background:linear-gradient(0deg,#030a13dd,#030a1366);border-radius:3px}.ship-marker.offscreen>i{width:20px;box-shadow:none;border:0;text-shadow:0 1px 5px #000}.ship-marker.home-marker.offscreen>i{color:#82bfd0}
 .target-readout{left:auto;right:38px;top:auto;bottom:190px;min-width:210px;text-align:right;border-left:0;border-right:1px solid #c6a46a55;background:linear-gradient(270deg,#030a13c9,#030a1366)}
 @media(max-width:760px){.target-readout{right:18px;bottom:180px;font-size:10px;min-width:150px;max-width:150px;padding:7px 9px}.target-readout small{font-size:9px}.ship-marker>span{font-size:10px}.ship-marker small{font-size:9px}.home-marker>span{font-size:9px}.wing-panel,.carrier-panel{padding:8px}}
+
+/* Weapon text stays at the screen edge; only acquisition uses the center ring. */
+.torpedo-hud{position:absolute;left:50%;top:50%;pointer-events:none;z-index:4;color:#b2bec9}
+.torpedo-ring{position:absolute;width:108px;height:108px;left:-54px;top:-54px;overflow:visible;transform:rotate(-90deg)}
+.torpedo-ring circle{fill:none;stroke:currentColor;stroke-width:2}
+.torpedo-track{opacity:.18}
+#torpedo-progress{stroke-dasharray:100;stroke-dashoffset:100;stroke-width:3;transition:stroke-dashoffset .08s linear}
+.torpedo-card{position:fixed;top:auto;bottom:125px;left:auto;right:38px;width:240px;text-align:center;padding:10px 12px;border:1px solid #69809180;border-radius:5px;background:linear-gradient(100deg,#07121de8,#122331e8);box-shadow:0 4px 18px #0008;box-sizing:border-box}
+.torpedo-label{display:block;font-size:10px;letter-spacing:3px;opacity:.8}
+.torpedo-card strong{display:block;font-size:20px;line-height:1.65;letter-spacing:1px}
+.torpedo-card small{display:block;font-size:12px;line-height:1.5}
+.torpedo-hud[data-state=locking]{color:#ffce75}
+.torpedo-hud[data-state=ready]{color:#8fffd0}
+.torpedo-hud[data-state=ready] .torpedo-card{border:2px solid #8fffd0;background:#082a27ee;box-shadow:0 0 22px #4dffb533}
+.torpedo-hud[data-state=ready] strong{font-size:25px;font-weight:800}
+.torpedo-hud[data-state=cooldown]{color:#9ab9dc}
+html:not([data-flight-state=playing]) .torpedo-hud{visibility:hidden}
+@media(max-height:700px){.torpedo-card{top:auto;left:auto;right:38px;bottom:120px;width:220px;padding:5px 8px}.torpedo-card strong{font-size:17px}.torpedo-hud[data-state=ready] strong{font-size:21px}.torpedo-ring{width:84px;height:84px;left:-42px;top:-42px}}
+
+.torpedo-hud[data-state=idle] .torpedo-ring,.torpedo-hud[data-state=cooldown] .torpedo-ring{visibility:hidden}
+.target-readout{bottom:235px}
+@media(max-width:760px){.torpedo-card{right:18px;width:210px}.target-readout{bottom:230px}}
+
+.mission-status{max-width:48vw;line-height:1.5;letter-spacing:.5px}.mission-status small{line-height:1.5}
+#bomber-status{white-space:pre-line;font-size:11px;color:#9fd4e5;line-height:1.9;margin:8px 0}#bomber-status:empty{display:none}

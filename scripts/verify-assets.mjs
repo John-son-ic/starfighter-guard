@@ -25,7 +25,7 @@ const DEFAULT_MODELS_DIRECTORY = 'public/models';
 const MANIFEST_FILE = 'manifest.json';
 
 /** MVP v0.1 model set, from src/shared/config.ts MVP_CONFIG.models. */
-const EXPECTED_MODEL_IDS = Object.freeze(['venator', 'eta2', 'arc170', 'vulture']);
+const EXPECTED_MODEL_IDS = Object.freeze(['venator', 'eta2', 'arc170', 'vulture', 'munificent', 'ywing']);
 
 /** Only these primitive modes are exported; 4 is TRIANGLES. */
 const TRIANGLES_MODE = 4;

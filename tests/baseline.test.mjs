@@ -5,7 +5,7 @@ import { MVP_CONFIG, MISSION_CONFIG, WEAPON_CONFIG, DEFAULT_SETTINGS } from '../
 test('mission remains within the agreed fifteen-fighter budget', () => {
   assert.equal(1 + MVP_CONFIG.friendlies + MVP_CONFIG.maxActiveEnemies, 15);
   assert.ok(MISSION_CONFIG.waves.every((count) => Number.isInteger(count) && count > 0 && count <= 10));
-  assert.equal(MISSION_CONFIG.waves.reduce((sum, count) => sum + count, 0), 46);
+  assert.equal(MISSION_CONFIG.waves.reduce((sum, count) => sum + count, 0), 24);
   assert.ok(Object.isFrozen(MISSION_CONFIG.waves));
 });
 

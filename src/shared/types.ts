@@ -1,6 +1,6 @@
 /** Contract v1. Pure data only. Coordinate system: meters, +Y up, -Z forward. */
 export type Vec3 = Readonly<{ x: number; y: number; z: number }>;
-export type ModelId = 'venator' | 'eta2' | 'arc170' | 'vulture';
+export type ModelId = 'venator' | 'eta2' | 'arc170' | 'vulture' | 'munificent' | 'ywing';
 export type MissionPhase = 'briefing' | 'combat' | 'intermission' | 'won' | 'lost';
 export type LossReason = 'player-destroyed' | 'carrier-destroyed';
 

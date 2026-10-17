@@ -5,6 +5,34 @@
   "up": "+Y",
   "models": [
     {
+      "id": "munificent",
+      "file": "munificent.glb",
+      "source": "src/visual/models/munificent.ts",
+      "lengthMeters": 825,
+      "dimensionsMeters": [
+        413.8246765136719,
+        280.3896484375,
+        825
+      ],
+      "triangles": 4204,
+      "materialBatches": 8,
+      "bytes": 309364
+    },
+    {
+      "id": "ywing",
+      "file": "ywing.glb",
+      "source": "src/visual/models/ywing.ts",
+      "lengthMeters": 23.4,
+      "dimensionsMeters": [
+        15.543066024780273,
+        3.3818976879119873,
+        23.400001525878906
+      ],
+      "triangles": 896,
+      "materialBatches": 6,
+      "bytes": 69536
+    },
+    {
       "id": "venator",
       "file": "venator.glb",
       "source": "src/visual/models/venator.ts",
@@ -16,7 +44,7 @@
       ],
       "triangles": 94744,
       "materialBatches": 9,
-      "bytes": 5557332
+      "bytes": 5557360
     },
     {
       "id": "eta2",
@@ -28,9 +56,9 @@
         1.5281965732574463,
         5.46999979019165
       ],
-      "triangles": 1336,
-      "materialBatches": 7,
-      "bytes": 101996
+      "triangles": 3164,
+      "materialBatches": 8,
+      "bytes": 234496
     },
     {
       "id": "arc170",
@@ -42,9 +70,9 @@
         4.174322128295898,
         12.710000038146973
       ],
-      "triangles": 1996,
+      "triangles": 5148,
       "materialBatches": 7,
-      "bytes": 149596
+      "bytes": 376432
     },
     {
       "id": "vulture",
@@ -52,13 +80,13 @@
       "source": "src/visual/models/vulture.ts",
       "lengthMeters": 6.96,
       "dimensionsMeters": [
-        4.840447902679443,
-        1.1397552490234375,
+        4.740377426147461,
+        1.145647406578064,
         6.960000038146973
       ],
-      "triangles": 660,
+      "triangles": 2164,
       "materialBatches": 6,
-      "bytes": 52664
+      "bytes": 160900
     }
   ]
 }

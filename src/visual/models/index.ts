@@ -1,3 +1,5 @@
+import {createMunificentModel} from './munificent.ts';
+import {createYWingModel} from './ywing.ts';
 import type { Group } from 'three';
 import type { ModelId } from '../../shared/types.ts';
 import { createVenatorModel } from './venator.ts';
@@ -6,6 +8,8 @@ import { createArc170Model } from './arc170.ts';
 import { createVultureModel } from './vulture.ts';
 
 export const MODEL_CATALOG: Record<ModelId, { name: string; english: string; role: string; length: number; factory: () => Group; features: readonly string[] }> = {
+  munificent: { name:'慷慨级护卫舰',english:'MUNIFICENT-CLASS',role:'分离势力 / 敌方旗舰',length:825,factory:createMunificentModel,features:['骨架舰身','双反应堆','前部舰桥','护盾投射节点'] },
+  ywing: { name:'Y翼轰炸机',english:'BTL-B Y-WING',role:'共和国 / 轰炸编队',length:23.4,factory:createYWingModel,features:['双引擎','长尾支架','重型鱼雷','护航目标'] },
   venator: { name: '狩猎者级', english: 'VENATOR-CLASS', role: '共和国主力舰 / 作战母舰', length: 1155, factory: createVenatorModel, features: ['楔形舰体', '双舰桥', '背部机库门', '引擎阵列'] },
   eta2: { name: '绝地截击机', english: 'ETA-2 ACTIS', role: '玩家座机 / 高机动截击', length: 5.47, factory: createEta2Model, features: ['分叉前部', '中央座舱', '散热翼', '黄色涂装'] },
   arc170: { name: 'ARC-170', english: 'AGGRESSIVE RECONNAISSANCE', role: '克隆人航空队 / 友军支援', length: 12.71, factory: createArc170Model, features: ['六翼轮廓', '三座座舱', '双侧引擎', '翼尖炮'] },

@@ -1,5 +1,9 @@
 # DSH最新报告
 
+## Codex补充（2026-10-17 / C16）
+
+三波+敌舰突袭已接入，报告docs/reports/codex-20261017-C16-frigate.md。配置及对应回归已由Codex更新：三波24、种子1摘要cebbfa2a、六模型资产/发布测试；完整176通过/4权限跳过。无新DSH任务。下文旧五波/四模型为历史，不覆盖当前MVP。
+
 ## Codex补充（2026-10-16 / C07）
 
 用户试玩后授权扩充五波46架、4架友军和母舰炮塔。Codex完成碰撞镜头与战斗接入，更新配置、文档及对应测试；tests/dsh/regression.test.mjs的种子1摘要从e67c7fa0更新为84e96e70，理由见docs/reports/codex-20261016-C07-battle.md。DSH原模块没有重写，没有新READY项。下文为此前版本的历史验收信息。

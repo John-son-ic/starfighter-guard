@@ -1,10 +1,10 @@
-import { BufferAttribute, Color, Group, Mesh, Vector3 } from 'three';
+import { Box3, BufferAttribute, Color, Group, Mesh, Vector3 } from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { finalize, palette, plate, wedge } from './primitives.ts';
 import { addVenatorDetail } from './venator-detail.ts';
 import { accelerateRaycast } from './venator-raycast.ts';
 
-export function createVenatorModel(includeTurrets = true): Group {
+export function createVenatorModel(includeTurrets = true, movingDoors = false): Group {
   const g = new Group();
   const p = palette();
   // Warm painted metal; the other fighters retain their existing palettes.
@@ -19,7 +19,10 @@ export function createVenatorModel(includeTurrets = true): Group {
   wedge(g, p.hull, hull.map(([x,z])=>[x*0.985,z*0.997]), 13, 18);
   const deck = [[0,-542],[25,-455],[241,275],[232,380],[205,410],[105,428],[-105,428],[-205,410],[-232,380],[-241,275],[-25,-455]] as const;
   plate(g, p.light, deck, 5, 25);
-  addVenatorDetail(g, p, includeTurrets);
+  const doors: Group[] = [];
+  addVenatorDetail(g, p, includeTurrets, movingDoors ? doors : undefined);
+  if (movingDoors) plate(g,p.dark,[[-42,-480],[42,-480],[42,106],[-42,106]],0.5,28);
+  const bounds = new Box3().setFromObject(g), center = bounds.getCenter(new Vector3()), scale = 1155 / bounds.getSize(new Vector3()).z;
   const result = finalize(g, 'venator', 1155);
   // Baked vertex tint survives GLB export. No image/texture fetches or shader-only detail.
   result.traverse(object => {
@@ -48,5 +51,12 @@ export function createVenatorModel(includeTurrets = true): Group {
     original.dispose();
     accelerateRaycast(object);
   });
+  doors.forEach((door,i)=>{
+    const db=new Box3().setFromObject(door),dc=db.getCenter(new Vector3());
+    const part=finalize(door,'hangar-door-'+i,db.getSize(new Vector3()).z);
+    part.traverse(o=>{if(o instanceof Mesh){o.geometry.setAttribute('color',new BufferAttribute(new Uint8Array(o.geometry.getAttribute('position').count*3).fill(235),3,true));o.geometry.translate(dc.x-center.x,dc.y-center.y,dc.z-center.z);o.geometry.scale(scale,scale,scale);accelerateRaycast(o)}});
+    result.add(part);
+  });
+  result.userData.hangarExit = new Vector3(0,52,-150).sub(center).multiplyScalar(scale).toArray();
   return result;
 }

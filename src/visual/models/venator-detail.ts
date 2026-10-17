@@ -3,7 +3,7 @@ import { box, cylinder, mesh, plate, wedge, type Finish, type HullPoint } from '
 import { armorBlock, loft, strut } from './venator-geometry.ts';
 
 /** Exterior authored against the user's three-quarter Venator reference. */
-export function addVenatorDetail(g: Group, p: Finish, includeTurrets = true) {
+export function addVenatorDetail(g: Group, p: Finish, includeTurrets = true, doors?: Group[]) {
   const armor = new MeshStandardMaterial({ color: 0x94968f, roughness: 0.92, metalness: 0.18 });
   const windows = new MeshStandardMaterial({ color: 0xbad6d3, emissive: 0x6b9192, emissiveIntensity: 0.55 });
   let seed = 19016;
@@ -31,17 +31,19 @@ export function addVenatorDetail(g: Group, p: Finish, includeTurrets = true) {
 
   // Paired red hangar doors with bevels, border strips, inset leaves and scuffed paint.
   for (const side of [-1,1]) {
+    const door = doors ? new Group() : g;
+    if (doors) doors.push(door);
     const outline: HullPoint[] = [[side*2,-487],[side*10,-480],[side*45,106],[side*2,106]];
-    plate(g,p.trim,outline,1,28);
+    plate(door,p.trim,outline,1,28);
     for(let i=0;i<15;i++) {
       const z=-478+i*38.5, w=10.4+i*2.25;
       const shape: HullPoint[]=[[side*2,z],[side*w,z],[side*(w+2),z+36],[side*2,z+36]];
-      plate(g,p.red,shape,3,29.7);
+      plate(door,p.red,shape,3,29.7);
       const inset: HullPoint[]=[[side*4,z+3],[side*(w-2),z+3],[side*w,z+32],[side*4,z+32]];
-      plate(g,p.red,inset,0.7,31.6);
-      box(g,p.trim,[w-4,0.4,0.7],[side*(w+3)/2,32,z+4]);
-      box(g,armor,[1.3,1.5,5],[side*(w+1),31,z+17]);
-      for(let j=0;j<4;j++) box(g,armor,[0.4+random()*1.2,0.15,1+random()*4],[side*(4+random()*(w-4)),32.05,z+5+random()*25]);
+      plate(door,p.red,inset,0.7,31.6);
+      box(door,p.trim,[w-4,0.4,0.7],[side*(w+3)/2,32,z+4]);
+      box(door,armor,[1.3,1.5,5],[side*(w+1),31,z+17]);
+      for(let j=0;j<4;j++) box(door,armor,[0.4+random()*1.2,0.15,1+random()*4],[side*(4+random()*(w-4)),32.05,z+5+random()*25]);
     }
   }
   box(g,p.dark,[1.6,0.6,578],[0,31.7,-189]);

@@ -18,7 +18,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '..', '..');
 const REAL_DIR = join(REPO_ROOT, 'public', 'models');
 const REAL_MANIFEST = JSON.parse(readFileSync(join(REAL_DIR, 'manifest.json'), 'utf8'));
-const EXPECTED_IDS = ['venator', 'eta2', 'arc170', 'vulture'];
+const EXPECTED_IDS = ['venator', 'eta2', 'arc170', 'vulture', 'munificent', 'ywing'];
 const SCRIPT_PATH = join(REPO_ROOT, 'scripts', 'verify-assets.mjs');
 
 const TMP_ROOT = join(REPO_ROOT, 'artifacts', 'local', `assets-test-${process.pid}`);
@@ -75,7 +75,7 @@ test('importing the module does not run the CLI', () => {
   // Reaching this line at all proves the import had no side effects.
   assert.equal(typeof verifyAssets, 'function');
   const result = verifyAssets(REAL_DIR);
-  assert.equal(result.modelCount, 4);
+  assert.equal(result.modelCount, 6);
   assert.equal(result.totalBytes, REAL_MANIFEST.models.reduce((sum, model) => sum + model.bytes, 0));
 });
 
@@ -83,13 +83,13 @@ test('the real exported assets pass verification', () => {
   const result = verifyAssets(REAL_DIR);
   assert.equal(result.modelCount, EXPECTED_IDS.length);
   assert.deepEqual(result.errors, []);
-  assert.equal(result.totalBytes, statSync(join(REAL_DIR, 'venator.glb')).size + statSync(join(REAL_DIR, 'eta2.glb')).size + statSync(join(REAL_DIR, 'arc170.glb')).size + statSync(join(REAL_DIR, 'vulture.glb')).size);
+  assert.equal(result.totalBytes, EXPECTED_IDS.reduce((sum,id)=>sum+statSync(join(REAL_DIR,id+'.glb')).size,0));
   for (const id of EXPECTED_IDS) assert.ok(existsSync(join(REAL_DIR, `${id}.glb`)), `${id}.glb exists`);
 
   // The unmodified fixture copy must pass too, so later failures come from the mutation.
   const staged = stage('clean');
   assert.deepEqual(staged.errors(), []);
-  assert.equal(verifyAssets(staged.dir).modelCount, 4);
+  assert.equal(verifyAssets(staged.dir).modelCount, 6);
 });
 
 test('a missing expected model is reported by id', () => {
@@ -137,7 +137,7 @@ test('path traversal in the manifest is refused', () => {
     expectError(staged.errors(), 'path traversal refused', `traversal attempt ${JSON.stringify(attempt)} must be refused`);
   }
   // The refused entry must never be counted as verified.
-  assert.equal(verifyAssets(staged.dir, { throwOnError: false }).modelCount, 3);
+  assert.equal(verifyAssets(staged.dir, { throwOnError: false }).modelCount, 5);
 });
 
 test('a manifest file name pointing at a missing GLB is reported', () => {
@@ -268,7 +268,7 @@ test('the CLI prints the model count and total bytes and exits zero', () => {
   const result = runCli(staged.dir);
 
   assert.equal(result.status, 0, `CLI must exit 0 on success, got ${result.status}: ${result.stderr}`);
-  assert.match(result.stdout, /verified 4 models/);
+  assert.match(result.stdout, /verified 6 models/);
   assert.match(result.stdout, new RegExp(`${expectedBytes} bytes`));
   assert.equal(result.stderr.trim(), '', 'a successful run prints nothing to stderr');
 });

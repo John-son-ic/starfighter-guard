@@ -5,8 +5,10 @@ import { MODEL_CATALOG } from './models/index.ts';
 import { disposeModel } from './models/primitives.ts';
 import type { ModelId } from '../shared/types.ts';
 
-const ids: ModelId[] = ['venator', 'eta2', 'arc170', 'vulture'];
+const ids: ModelId[] = ['venator', 'eta2', 'arc170', 'vulture', 'munificent', 'ywing'];
 const silhouettes: Record<ModelId, string> = {
+  munificent:'<path d="M40 5h40l12 30-9 48H37L28 35Z"/><path class="accent" d="M56 5h8v80h-8Z"/>',
+  ywing:'<path d="M52 5h16v45h30v35H85V60H35v25H22V50h30Z"/>',
   venator: '<path d="M60 4 98 75 87 85 33 85 22 75Z"/><path class="accent" d="M58 13h4v53h-4z"/><path d="M48 69h8v18h-8zm16 0h8v18h-8z"/>',
   eta2: '<path d="m45 13-18 52 7 16 16-5 3-24h14l3 24 16 5 7-16-18-52-8 35H53Z"/><circle class="accent" cx="60" cy="60" r="9"/>',
   arc170: '<path d="m56 8-5 45-42 9v9l42-4 3 19h12l3-19 42 4v-9l-42-9-5-45Z"/><path class="accent" d="M32 37h8v46h-8zm48 0h8v46h-8z"/>',
@@ -25,7 +27,7 @@ export function startModelViewer(app: HTMLElement) {
       <aside class="sidebar">
         <a class="brand" href="./"><span class="republic-mark">✦</span><span>STARFIGHTER<span class="brand-sub">GUARD / 舰船档案</span></span></a>
         <div class="archive-code">REPUBLIC NAVAL ARCHIVE<span>19 BBY</span></div>
-        <div class="section-label">舰船目录 <span>04</span></div>
+        <div class="section-label">舰船目录 <span>06</span></div>
         <nav aria-label="选择模型">${ids.map((id, i) => `<button class="ship-card" data-model="${id}" aria-pressed="false"><span class="ship-index">0${i + 1}</span><svg viewBox="0 0 120 95" aria-hidden="true">${silhouettes[id]}</svg><span class="ship-name">${MODEL_CATALOG[id].name}<small>${id === 'arc170' ? 'ARC-170 STARFIGHTER' : MODEL_CATALOG[id].english}</small></span><span class="ship-arrow">↗</span></button>`).join('')}</nav>
         <div class="sidebar-bottom"><span class="signal-dot"></span> C01 · 模型预览<span>本地程序化资产 / v0.1</span></div>
       </aside>

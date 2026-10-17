@@ -69,7 +69,7 @@ export class TacticalHUD {
     const target = world.target;
     if (!target) { this.occluded = false; this.checkedId = null; }
     else if (target.id !== this.checkedId || world.time - this.checkedAt >= 0.1) {
-      const hit = world.hullHit(world.player.position, target.position);
+      const hit = world.hullHit(world.player.position, world.targetSurface(target,world.player.position));
       this.occluded = !!hit && hit.distance < world.player.position.distanceTo(target.position) - 0.01;
       this.checkedId = target.id; this.checkedAt = world.time;
     }
@@ -99,9 +99,9 @@ export class TacticalHUD {
       }
     }
     for (const [id, marker] of this.markers) {
-      if (!world.fighters.some(f => f.id === id)) { marker.root.remove(); this.markers.delete(id); }
+      if (![...world.fighters,...world.objectives].some(f => f.id === id)) { marker.root.remove(); this.markers.delete(id); }
     }
-    for (const fighter of world.fighters) {
+    for (const fighter of [...world.fighters,...world.objectives]) {
       if (fighter.id === 'player') continue;
       let marker = this.markers.get(fighter.id);
       if (!marker) { marker = this.createMarker(fighterLabel(fighter), fighter.id); this.markers.set(fighter.id, marker); }

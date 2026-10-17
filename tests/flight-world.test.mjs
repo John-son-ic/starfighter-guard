@@ -23,7 +23,7 @@ test('world consumes spawn IDs once, removes destroyed entities and advances wav
   world.step(dt, NEUTRAL_INPUT);
   assert.equal(world.enemies.length, 0); assert.equal(world.mission.kills, 6); assert.equal(world.mission.phase, 'intermission');
   for (let i = 0; i < 602; i++) world.step(dt, NEUTRAL_INPUT);
-  assert.equal(world.enemies.length, 10); assert.equal(world.mission.waveIndex, 1);
+  assert.equal(world.enemies.length, 8); assert.equal(world.mission.waveIndex, 1);
   disposeModel(carrier);
 });
 
@@ -51,7 +51,8 @@ test('flying into the hull resolves contact and damage instead of passing throug
   world.player.position.set(0, 100, 0); world.player.previous.copy(world.player.position);
   world.player.rotation.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
   for (let i = 0; i < 95; i++) world.step(dt, NEUTRAL_INPUT);
-  assert.ok(world.player.health < 100 && world.player.health > 0);
+  assert.equal(world.player.health, 0);
+  assert.equal(world.mission.phase, 'lost');
   assert.ok(world.player.position.y > -70, 'resolved player stays outside the lower hull');
   disposeModel(carrier);
 });

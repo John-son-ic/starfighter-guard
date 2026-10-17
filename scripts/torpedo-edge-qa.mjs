@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import {build} from 'vite';
+import {withBrowser} from './browser-session.mjs';
+await build({logLevel:'error',build:{outDir:'artifacts/local/c12-qa-build',emptyOutDir:false},define:{'import.meta.env.DEV':'true'}});
+await withBrowser('c14-torpedo-edge',async({call,evaluate,capture,pageErrors})=>{
+ await call('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
+ await call('Page.navigate',{url:'http://127.0.0.1:5188/?qa=1'});
+ for(let i=0;i<100;i++){if(await evaluate('!!window.__flightQA'))break;await new Promise(r=>setTimeout(r,100));}
+ await evaluate(`document.querySelector('#launch-button').click();__flightQA.pause();__flightQA.advance(182);(()=>{const w=__flightQA.world,e=w.enemies[0];w.player.position.set(0,1000,0);w.player.previous.copy(w.player.position);w.player.rotation.identity();w.fighters.splice(1,w.fighters.length-1,e);w.targetId=e.id;for(let i=0;i<125;i++){e.position.copy(w.player.position);e.position.z-=500;e.previous.copy(e.position);__flightQA.advance(1)}__flightQA.refresh()})()`);
+ assert.equal(await evaluate('__flightQA.world.torpedoLock'),2);
+ assert.equal(await evaluate("document.querySelector('.torpedo-hud').dataset.state"),'ready');
+ await evaluate("document.querySelector('.flight-overlay').style.display='none';document.querySelector('.torpedo-hud').style.visibility='visible'");
+ await capture('ready');
+ await evaluate("__flightQA.world.torpedoLock=1;__flightQA.refresh()");
+ assert.equal(await evaluate("document.querySelector('.torpedo-hud').dataset.state"),'locking');await capture('locking');
+ await evaluate("__flightQA.world.torpedoLock=2;__flightQA.refresh();document.querySelector('.flight-overlay').style.removeProperty('display');document.querySelector('.torpedo-hud').style.removeProperty('visibility')");
+ await evaluate(`document.querySelector('#launch-button').click()`);
+ await call('Input.dispatchKeyEvent',{type:'keyDown',code:'KeyR',key:'r'});
+ await new Promise(r=>setTimeout(r,150));
+ await call('Input.dispatchKeyEvent',{type:'keyUp',code:'KeyR',key:'r'});
+ await evaluate('__flightQA.pause()');
+ const result=await evaluate(`({cooldown:__flightQA.world.torpedoCooldown,missiles:__flightQA.world.bolts.filter(b=>b.targetId).length,text:document.querySelector('#torpedo-status').textContent})`);
+ assert.ok(result.cooldown>17);assert.equal(result.missiles,1);assert.match(result.text,/冷却/);
+ assert.equal(await evaluate("document.querySelector('.torpedo-hud').dataset.state"),'cooldown');
+ await evaluate("document.querySelector('.flight-overlay').style.display='none';document.querySelector('.torpedo-hud').style.visibility='visible'");await capture('cooldown');
+ await call('Emulation.setDeviceMetricsOverride',{width:1024,height:640,deviceScaleFactor:1,mobile:false});await capture('compact');
+ await evaluate("document.querySelector('.flight-overlay').style.removeProperty('display');document.querySelector('.torpedo-hud').style.removeProperty('visibility')");
+ await evaluate('__flightQA.restart();__flightQA.pause()');assert.equal(await evaluate('__flightQA.world.torpedoCooldown'),0);
+ assert.deepEqual(pageErrors,[]);return{result,checks:['continuous simulation lock','actual R key launch','cooldown HUD','restart clears cooldown'],note:'Target staged in front of player for lock acquisition; software-rendered screenshots are not hardware performance evidence.'};
+},{serverArgs:['--input-type=module','-e',"import{createReleaseServer}from'./scripts/serve-release.mjs';createReleaseServer('artifacts/local/c12-qa-build').listen(5188,'127.0.0.1',()=>console.log('Local: ready'))"]});

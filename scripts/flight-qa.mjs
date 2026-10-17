@@ -40,7 +40,7 @@ await withBrowser(process.argv[2] ?? 'c02', async ({ call, evaluate, capture, se
   await waitResult();
   assert.equal(await evaluate('document.documentElement.dataset.flightState'), 'result');
   await capture('failure');
-  await evaluate(`window.__flightQA.restart();window.__flightQA.pause();for(let wave=0;wave<5;wave++){window.__flightQA.advance(wave===0?182:602);window.__flightQA.world.enemies.forEach(e=>e.health=0);window.__flightQA.advance(1)}document.querySelector('#launch-button').click()`);
+  await evaluate(`window.__flightQA.restart();window.__flightQA.pause();for(let wave=0;wave<3;wave++){window.__flightQA.advance(wave===0?182:602);window.__flightQA.world.enemies.forEach(e=>e.health=0);window.__flightQA.advance(1)}window.__flightQA.advance(241);window.__flightQA.world.generator.health=0;window.__flightQA.advance(1);window.__flightQA.world.bridge.health=0;window.__flightQA.advance(1);document.querySelector('#launch-button').click()`);
   await waitResult();
   assert.equal(await evaluate('window.__flightQA.world.mission.phase'), 'won');
   assert.equal(await evaluate('document.documentElement.dataset.flightState'), 'result');
@@ -54,5 +54,5 @@ await withBrowser(process.argv[2] ?? 'c02', async ({ call, evaluate, capture, se
   await call('Page.navigate', { url: 'http://127.0.0.1:5188/?qa=1' }); await waitReady();
   assert.equal(await evaluate('document.documentElement.dataset.flightState'), 'menu');
   assert.deepEqual(pageErrors, []);
-  return { checks: ['launch briefing', 'actual keyboard and pointer movement/fire', 'wing recall', 'pause freezes simulation', 'scripted loss branch', 'scripted five-wave win branch', 'restart clears world', 'real localStorage save', 'blocked localStorage property fallback'], note: 'Scripted outcome checks validate transitions; they are not a human gameplay balance test.' };
+  return { checks: ['launch briefing', 'actual keyboard and pointer movement/fire', 'wing recall', 'pause freezes simulation', 'scripted loss branch', 'scripted three-wave and frigate win branch', 'restart clears world', 'real localStorage save', 'blocked localStorage property fallback'], note: 'Scripted outcome checks validate transitions; they are not a human gameplay balance test.' };
 });

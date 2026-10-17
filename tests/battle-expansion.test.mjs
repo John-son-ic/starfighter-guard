@@ -6,11 +6,12 @@ import { disposeModel } from '../src/visual/models/primitives.ts';
 import { FlightWorld,NEUTRAL_INPUT } from '../src/app/game/world.ts';
 import { safeChaseCamera } from '../src/app/game/camera.ts';
 
-test('deck, bridge, side and ventral impacts leave a clear camera and working controls',()=>{
+test('deck, bridge, side and ventral impacts kill the player and leave a clear result camera',()=>{
   const carrier=createVenatorModel(false);
   try {
     for(const [start,direction] of [[[100,5,0],[0,-1,0]],[[46,150,300],[0,-1,0]],[[320,-50,280],[-1,0,0]],[[100,-130,0],[0,1,0]]]) {
       const w=new FlightWorld(carrier),p=w.player;
+      p.invulnerable=10; // A collision is fatal even during the old collision grace period.
       p.position.set(...start);p.previous.copy(p.position);
       p.rotation.setFromRotationMatrix(new Matrix4().lookAt(new Vector3(),new Vector3(...direction),new Vector3(0,1,0)));
       for(let i=0;i<150&&w.playerCollisionVersion===0;i++)w.step(1/60,NEUTRAL_INPUT);
@@ -19,10 +20,13 @@ test('deck, bridge, side and ventral impacts leave a clear camera and working co
       const camera=safeChaseCamera(w,new Vector3(0,4.8,22).applyQuaternion(p.rotation).add(p.position));
       assert.ok(camera.distanceTo(p.position)>p.radius+6,'camera remains outside player mesh');
       assert.equal(w.hullHit(p.position,camera),null,'carrier does not cover camera');
-      const before=p.rotation.clone(),position=p.position.clone();
+      assert.equal(p.health,0);assert.equal(w.mission.phase,'lost');
+      assert.ok(w.events.some(e=>e.type==='explosion'));
+      const position=p.position.clone();
       for(let i=0;i<30;i++)w.step(1/60,{...NEUTRAL_INPUT,yaw:0.5,pitch:0.2});
-      assert.ok(position.distanceTo(p.position)>10);assert.ok(before.angleTo(p.rotation)>0.1);
-      assert.ok(p.position.toArray().every(Number.isFinite));assert.ok(p.health>0);
+      assert.deepEqual(p.position.toArray(),position.toArray());
+      const fresh=new FlightWorld(carrier);
+      assert.equal(fresh.player.health,100);assert.equal(fresh.terminal,false);
     }
   } finally {disposeModel(carrier)}
 });

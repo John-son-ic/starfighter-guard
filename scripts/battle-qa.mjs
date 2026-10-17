@@ -4,7 +4,7 @@ import { withBrowser } from './browser-session.mjs';
 
 // Isolated local QA build: test hooks enabled here, never in the production build.
 await build({logLevel:'error',build:{outDir:'artifacts/local/c07-qa-build',emptyOutDir:false},define:{'import.meta.env.DEV':'true'}});
-await withBrowser('c07-battle', async ({call,evaluate,capture,pageErrors})=>{
+await withBrowser('c11-fatal-collision', async ({call,evaluate,capture,pageErrors})=>{
   await call('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
   await call('Page.navigate',{url:'http://127.0.0.1:5188/?qa=1'});
   let ready=false;
@@ -13,10 +13,14 @@ await withBrowser('c07-battle', async ({call,evaluate,capture,pageErrors})=>{
   await evaluate(`document.querySelector('#launch-button').click();__flightQA.pause();(()=>{const w=__flightQA.world;w.player.position.set(100,5,0);w.player.previous.copy(w.player.position);w.player.rotation.set(-Math.SQRT1_2,0,0,Math.SQRT1_2);__flightQA.refresh()})()`);
   await evaluate(`__flightQA.advance(30)`);
   const collision=await evaluate(`({snapshot:__flightQA.snapshot(),diagnostics:__flightQA.diagnostics(),collisions:__flightQA.world.playerCollisionVersion})`);
-  assert.ok(collision.collisions>0);assert.ok(collision.snapshot.health>0&&collision.snapshot.health<100);
+  assert.ok(collision.collisions>0);assert.equal(collision.snapshot.health,0);assert.equal(await evaluate(`__flightQA.world.mission.phase`),'lost');
   const distance=(a,b)=>Math.hypot(...a.map((v,i)=>v-b[i]));
   assert.ok(distance(collision.snapshot.player,collision.diagnostics.camera)>9);
   await evaluate(`document.querySelector('#launch-button').click()`);
+  for(let n=0;n<100;n++){if(await evaluate(`document.documentElement.dataset.flightState==='result'`))break;await new Promise(r=>setTimeout(r,100));}
+  assert.equal(await evaluate(`document.documentElement.dataset.flightState`),'result');
+  await capture('collision-result');
+  await evaluate(`document.querySelector('#restart-button').click()`);
   await call('Input.dispatchMouseEvent',{type:'mouseMoved',x:1000,y:400});
   await new Promise(r=>setTimeout(r,1000));
   const after=await evaluate(`({snapshot:__flightQA.snapshot(),diagnostics:__flightQA.diagnostics(),input:__flightQA.input()})`);
@@ -31,13 +35,13 @@ await withBrowser('c07-battle', async ({call,evaluate,capture,pageErrors})=>{
   await evaluate(`document.querySelector('.flight-overlay').style.display='none'`);
   await capture('carrier-battery');
   await evaluate(`document.querySelector('.flight-overlay').style.removeProperty('display')`);
-  await evaluate(`__flightQA.restart();__flightQA.pause();for(let wave=0;wave<5;wave++){__flightQA.advance(wave===0?182:602);__flightQA.world.enemies.forEach(e=>e.health=0);__flightQA.advance(1)}document.querySelector('#launch-button').click()`);
+  await evaluate(`__flightQA.restart();__flightQA.pause();for(let wave=0;wave<3;wave++){__flightQA.advance(wave===0?182:602);__flightQA.world.enemies.forEach(e=>e.health=0);__flightQA.advance(1)}__flightQA.advance(241);__flightQA.world.generator.health=0;__flightQA.advance(1);__flightQA.world.bridge.health=0;__flightQA.advance(1);document.querySelector('#launch-button').click()`);
   for(let n=0;n<100;n++){if(await evaluate(`document.documentElement.dataset.flightState==='result'`))break;await new Promise(r=>setTimeout(r,100));}
   assert.equal(await evaluate(`__flightQA.world.mission.phase`),'won');
-  assert.equal(await evaluate(`__flightQA.world.mission.kills`),46);
-  await capture('five-wave-victory');
+  assert.equal(await evaluate(`__flightQA.world.mission.kills`),24);
+  await capture('three-wave and frigate-victory');
   await evaluate(`document.querySelector('#restart-button').click();__flightQA.pause()`);
   assert.equal(await evaluate(`__flightQA.world.turretShots`),0);
   assert.deepEqual(pageErrors,[]);
-  return {collision,after,battery,checks:['actual collision and camera clearance','pointer steering and movement after collision','four escort HUD rows','carrier muzzle flash and physical shells','five-wave result and restart reset'],note:'Staged outcome checks are not a human balance or hardware FPS test.'};
+  return {collision,after,battery,checks:['actual collision and camera clearance','fatal collision result and pointer steering after restart','four escort HUD rows','carrier muzzle flash and physical shells','three-wave and frigate result and restart reset'],note:'Staged outcome checks are not a human balance or hardware FPS test.'};
 },{serverArgs:['--input-type=module','-e',"import{createReleaseServer}from'./scripts/serve-release.mjs';createReleaseServer('artifacts/local/c07-qa-build').listen(5188,'127.0.0.1',()=>console.log('Local: ready'))"]});
