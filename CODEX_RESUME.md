@@ -1,5 +1,7 @@
 # Codex恢复入口
 
+C29 / 2026-10-17：已定位首次GitHub Actions失败：npm run check先测试后构建，干净检出缺少dist，导致两项发布测试失败。改为类型检查→资产校验→构建→测试；无旧dist的独立源码副本完整检查退出0，237通过/4个Windows权限跳过。修复提交推送后需查看对应Actions结果；旧云端运行已证明符号链接用例在Linux通过。报告docs/reports/codex-20261017-C29-ci.md。
+
 C28 / 2026-10-17：按用户明确要求，使用GitHub Desktop账号John-son-ic发布私有仓库https://github.com/John-son-ic/starfighter-guard；origin和main跟踪已建立，已有游戏提交历史已上传。未上传node_modules/dist/临时产物。记录docs/reports/codex-20261017-C28-github.md。未来是否推送依据用户后续授权，不自动改公开可见性。
 
 C27 / 2026-10-17：第二任务“断链行动”已可玩；主菜单直接选02，暂停/结算可返回选择。中继站双设施任选顺序、反应堆装甲门、60秒撤离、狩猎者级8秒开始跃迁/4秒入场/6秒火力压制，第18秒开放撤离区；两处会话检查点。空间站GLB 4676面/8批次/343600字节，现7资产。D12的39项测试已审查接受，完整237通过/4权限跳过，实际驾驶140.1秒胜利、救援炮20发；浏览器及双任务生产包通过，dist已更新。报告docs/reports/codex-20261017-C27-relay.md。无新DSH READY，下面开发中/旧数值为历史。
