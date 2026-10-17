@@ -14,13 +14,17 @@ export class FlightScene {
   readonly camera = new THREE.PerspectiveCamera(58, 1, 0.4, 14000);
   readonly renderer: THREE.WebGLRenderer;
   readonly carrier = createVenatorModel(false,true);
-  readonly frigate = createMunificentModel();
+  readonly frigate = createMunificentModel(false);
+  readonly secondFrigate = createMunificentModel(false);
+  private secondEffects!: {barrier: THREE.Mesh; particles: THREE.Points; relay: THREE.Mesh; bridge: THREE.Mesh};
   private barrier = new THREE.Mesh(new THREE.SphereGeometry(1,32,20),new THREE.ShaderMaterial({uniforms:{time:{value:0}},transparent:true,depthWrite:false,side:THREE.DoubleSide,
     vertexShader:'varying vec3 n; varying vec3 v; varying vec3 p; void main(){vec4 mv=modelViewMatrix*vec4(position,1.);n=normalize(normalMatrix*normal);v=normalize(-mv.xyz);p=position;gl_Position=projectionMatrix*mv;}',
     fragmentShader:'uniform float time;varying vec3 n;varying vec3 v;varying vec3 p;void main(){float rim=pow(1.-abs(dot(normalize(n),normalize(v))),2.);float wave=pow(.5+.5*sin(p.y*65.-time*2.),18.);gl_FragColor=vec4(.22,.58,1.,.025+rim*.22+wave*.055);}'}));
   private shieldParticles: THREE.Points;
   private relay = new THREE.Mesh(new THREE.SphereGeometry(28,12,8),new THREE.MeshBasicMaterial({color:0xffa84d,wireframe:true}));
   private bridgeBeacon = new THREE.Mesh(new THREE.SphereGeometry(44,12,8),new THREE.MeshBasicMaterial({color:0xff6655,wireframe:true}));
+  private enemyHeads: THREE.Group[] = [];
+  private enemyFlashes: THREE.Mesh[] = [];
   private turretHeads: THREE.Group[] = [];
   private turretFlashes: THREE.Mesh[] = [];
   private turretBases: THREE.InstancedMesh;
@@ -32,6 +36,9 @@ export class FlightScene {
   private flashPool: THREE.Mesh[] = [];
   private flashGeometry = new THREE.IcosahedronGeometry(1, 1);
   private dummy = new THREE.Object3D();
+  private playerShield = new THREE.Mesh(new THREE.SphereGeometry(1,24,16),new THREE.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{time:{value:0}},
+    vertexShader:'varying vec3 n;varying vec3 v;void main(){vec4 mv=modelViewMatrix*vec4(position,1.);n=normalize(normalMatrix*normal);v=normalize(-mv.xyz);gl_Position=projectionMatrix*mv;}',
+    fragmentShader:'uniform float time;varying vec3 n;varying vec3 v;void main(){float rim=pow(1.-abs(dot(normalize(n),normalize(v))),2.);gl_FragColor=vec4(.25,.8,1.,.015+rim*(.32+.04*sin(time*8.)));}'}));
   private ready = false;
   private exhaust = new PlayerExhaust();
 
@@ -46,11 +53,14 @@ export class FlightScene {
     this.scene.add(new THREE.HemisphereLight(0xb7d8ee, 0x152638, 1.3));
     const light = new THREE.DirectionalLight(0xffedcf, 2.8); light.position.set(-1600, 2200, -900); this.scene.add(light);
     const rim = new THREE.DirectionalLight(0x436c9c, 1.2); rim.position.set(600, -500, 1200); this.scene.add(rim);
+    this.scene.add(this.playerShield);
     this.scene.add(this.carrier, this.exhaust.root,this.frigate,this.barrier,this.relay,this.bridgeBeacon);
     const particlePositions=new Float32Array(900*3);
     for(let i=0;i<900;i++){const y=1-2*(i+.5)/900,a=i*2.399963,r=Math.sqrt(1-y*y);particlePositions.set([r*Math.cos(a)*260,y*150,r*Math.sin(a)*470],i*3);}
     const particleGeometry=new THREE.BufferGeometry();particleGeometry.setAttribute('position',new THREE.BufferAttribute(particlePositions,3));
     this.shieldParticles=new THREE.Points(particleGeometry,new THREE.PointsMaterial({color:0x8ad8ff,size:3,transparent:true,opacity:.65,depthWrite:false,blending:THREE.AdditiveBlending}));this.scene.add(this.shieldParticles);
+    this.secondEffects={barrier:this.barrier.clone(),particles:this.shieldParticles.clone(),relay:this.relay.clone(),bridge:this.bridgeBeacon.clone()};
+    this.scene.add(this.secondFrigate,...Object.values(this.secondEffects));
     const flashGeometry=new THREE.SphereGeometry(1,8,6);
     const flashMaterial=new THREE.MeshBasicMaterial({color:0x9affb7});
     this.turretBases=new THREE.InstancedMesh(new THREE.CylinderGeometry(9,11,4,16),new THREE.MeshStandardMaterial({color:0x737775,roughness:0.8}),8);
@@ -58,6 +68,10 @@ export class FlightScene {
     for(let i=0;i<8;i++) {
       const head=createCarrierTurret(); this.scene.add(head);this.turretHeads.push(head);
       const flash=new THREE.Mesh(flashGeometry,flashMaterial);flash.scale.setScalar(3);flash.visible=false;this.scene.add(flash);this.turretFlashes.push(flash);
+    }
+    for(let i=0;i<12;i++){
+      const head=createCarrierTurret();head.scale.setScalar(.55);this.scene.add(head);this.enemyHeads.push(head);
+      const flash=new THREE.Mesh(flashGeometry,new THREE.MeshBasicMaterial({color:0xff6740}));flash.scale.setScalar(4);this.scene.add(flash);this.enemyFlashes.push(flash);
     }
     const starPositions = new Float32Array(2400 * 3);
     for (let i = 0; i < 2400; i++) {
@@ -101,18 +115,21 @@ export class FlightScene {
   }
 
   render(world: FlightWorld, dt: number, interpolation = 1) {
-    this.frigate.visible=world.stage!=='defense'&&world.stage!=='destroyed';
-    this.frigate.position.z=world.stage==='arrival'?-5000-Math.pow(1-world.stageTime/4,3)*14000:-5000;
-    this.frigate.scale.set(1,1,world.stage==='arrival'?1+(1-world.stageTime/4)*3:1);
-    this.frigate.visible && this.frigate.updateMatrixWorld(true);
-    this.barrier.visible=this.shieldParticles.visible=world.shieldActive&&world.stage!=='arrival';
-    this.barrier.position.copy(world.shieldCenter);this.barrier.scale.copy(world.shieldRadii);
-    this.shieldParticles.position.copy(world.shieldCenter);(this.shieldParticles.material as THREE.PointsMaterial).opacity=.5+.15*Math.sin(world.time*3);
-    // Keep particle envelope aligned to the ellipsoid; rotate only around its long axis is avoided.
-    this.shieldParticles.rotation.y=0;
-    (this.barrier.material as THREE.ShaderMaterial).uniforms.time!.value=world.time;
-    this.relay.visible=world.stage==='shield';this.relay.position.copy(world.generator.position);
-    this.bridgeBeacon.visible=world.stage==='launch'||world.stage==='assault';this.bridgeBeacon.position.copy(world.bridge.position);
+    for(const [index,ship] of world.capitalShips.entries()) {
+      const model=index===0?this.frigate:this.secondFrigate;
+      const fx=index===0?{barrier:this.barrier,particles:this.shieldParticles,relay:this.relay,bridge:this.bridgeBeacon}:this.secondEffects;
+      model.visible=world.stage!=='defense'&&!ship.destroyed;
+      model.position.copy(ship.position);
+      if(world.stage==='arrival')model.position.z-=Math.pow(1-world.stageTime/4,3)*14000;
+      model.scale.set(1,1,world.stage==='arrival'?1+(1-world.stageTime/4)*3:1);model.updateMatrixWorld(true);
+      fx.barrier.visible=fx.particles.visible=model.visible&&world.stage!=='arrival'&&ship.generator.health>0;
+      fx.barrier.position.copy(world.shieldCenterFor(ship));fx.barrier.scale.copy(world.shieldRadii);
+      fx.particles.position.copy(world.shieldCenterFor(ship));
+      (fx.particles.material as THREE.PointsMaterial).opacity=.5+.15*Math.sin(world.time*3);
+      (fx.barrier.material as THREE.ShaderMaterial).uniforms.time!.value=world.time;
+      fx.relay.visible=model.visible&&world.stage!=='arrival'&&ship.generator.health>0;fx.relay.position.copy(ship.generator.position);
+      fx.bridge.visible=model.visible&&world.stage!=='arrival'&&ship.generator.health<=0;fx.bridge.position.copy(ship.bridge.position);
+    }
     for(let i=0;i<2;i++){const door=this.carrier.getObjectByName('hangar-door-'+i);if(door)door.position.x=(i===0?-1:1)*world.hangarOpen*48;}
     this.carrier.updateMatrixWorld(true);
     for (const [id, group] of this.ships) {
@@ -125,11 +142,16 @@ export class FlightScene {
       model.visible = f.health > 0;
       if (f.id === 'player') this.exhaust.update(model, world.boosting && !world.terminal, f.health > 0, dt, world.time);
     }
+    const playerModel = this.ships.get('player');
+    this.playerShield.visible = world.playerShieldActive && !world.terminal;
+    if (playerModel) {this.playerShield.position.copy(playerModel.position);this.playerShield.quaternion.copy(playerModel.quaternion);}
+    this.playerShield.scale.set(5.5,3.5,5.5);
+    this.playerShield.material.uniforms.time!.value=world.time;
     let republic = 0; let enemy = 0;
     for (const bolt of world.bolts) {
       this.dummy.position.copy(bolt.previous).lerp(bolt.position, interpolation);
       this.dummy.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), bolt.velocity.clone().normalize());
-      this.dummy.scale.set(bolt.owner.startsWith('turret-')?2.8:1, bolt.owner.startsWith('turret-')?2.8:1, bolt.owner.startsWith('turret-')?2.2:1); if (bolt.targetId) this.dummy.scale.set(5, 5, 1.5); this.dummy.updateMatrix();
+      this.dummy.scale.set(bolt.owner.startsWith('turret-')?2.8:1, bolt.owner.startsWith('turret-')?2.8:1, bolt.owner.startsWith('turret-')?2.2:1); if (bolt.targetId) this.dummy.scale.set(5, 5, 1.5); if(bolt.capital)this.dummy.scale.set(5,5,8); this.dummy.updateMatrix();
       if (bolt.team === 'republic') this.republicBolts.setMatrixAt(republic++, this.dummy.matrix);
       else this.enemyBolts.setMatrixAt(enemy++, this.dummy.matrix);
     }
@@ -143,6 +165,13 @@ export class FlightScene {
       const flash=this.turretFlashes[i]!;flash.position.copy(turret.position).addScaledVector(turret.direction,38);flash.visible=turret.flash>0;
     });
     this.turretBases.instanceMatrix.needsUpdate=true;
+    world.enemyGuns.forEach((gun,i)=>{
+      const head=this.enemyHeads[i]!,flash=this.enemyFlashes[i]!;
+      head.visible=world.stage!=='defense'&&world.stage!=='arrival'&&world.stage!=='destroyed'&&gun.health>0;
+      head.position.copy(gun.position);head.rotation.y=Math.atan2(-gun.direction.x,-gun.direction.z);
+      head.getObjectByName('barrels')!.rotation.x=Math.asin(THREE.MathUtils.clamp(gun.direction.y,-1,1));
+      flash.visible=head.visible&&gun.flash>0;flash.position.copy(gun.position).addScaledVector(gun.direction,30);
+    });
     for (let i = this.flashes.length - 1; i >= 0; i--) {
       const flash = this.flashes[i]!; flash.life -= dt;
       flash.mesh.scale.setScalar(flash.size * (1 - flash.life / flash.duration) + 0.2);
@@ -203,5 +232,5 @@ export class FlightScene {
 }
 
 export function fighterLabel(f: Fighter) {
-  return f.id==='shield-generator'?'护盾发生器':f.id==='frigate-bridge'?'慷慨级舰桥':f.model==='ywing'?`金色 ${f.id.split('-')[1]}`:f.id === 'player' ? '绝地座机' : f.team === 'republic' ? `苍鹭 ${f.id.split('-')[1]}号` : `秃鹫 ${f.id.split('-').at(-1)}`;
+  return f.id.startsWith('enemy-gun-')?`敌舰炮塔 ${f.id.split('-').at(-1)}`:f.id.startsWith('shield-generator')?'敌舰 '+(f.id.endsWith('-2')?'2':'1')+' 护盾发生器':f.id.startsWith('frigate-bridge')?'敌舰 '+(f.id.endsWith('-2')?'2':'1')+' 舰桥':f.model==='ywing'?`金色 ${f.id.split('-')[1]}`:f.id === 'player' ? '绝地座机' : f.team === 'republic' ? `苍鹭 ${f.id.split('-')[1]}号` : `秃鹫 ${f.id.split('-').at(-1)}`;
 }

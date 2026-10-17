@@ -24,6 +24,8 @@ test('a bounded pilot can finish the campaign through actual movement, shots and
       input.throttle = target.position.distanceTo(world.player.position) > (target.model==='munificent'?1200:280) ? 1 : -1;
       input.fire = local.z < -0.985 && world.time>=retreatUntil;
       input.torpedo=world.torpedoLock>=2;
+      input.boost=world.stage!=='defense'&&world.boostEnergy>20;
+      input.jump=world.stage!=='defense'&&world.stage!=='arrival'&&world.jumpCooldown===0&&distance>1800&&local.z<-.999;
     }
     world.step(1 / 60, input);
     shots += world.events.filter(event => event.type === 'shot').length;

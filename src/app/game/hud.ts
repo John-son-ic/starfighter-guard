@@ -99,9 +99,9 @@ export class TacticalHUD {
       }
     }
     for (const [id, marker] of this.markers) {
-      if (![...world.fighters,...world.objectives].some(f => f.id === id)) { marker.root.remove(); this.markers.delete(id); }
+      if (![...world.fighters,...world.objectives,...world.exposedGuns].some(f => f.id === id)) { marker.root.remove(); this.markers.delete(id); }
     }
-    for (const fighter of [...world.fighters,...world.objectives]) {
+    for (const fighter of [...world.fighters,...world.objectives,...world.exposedGuns]) {
       if (fighter.id === 'player') continue;
       let marker = this.markers.get(fighter.id);
       if (!marker) { marker = this.createMarker(fighterLabel(fighter), fighter.id); this.markers.set(fighter.id, marker); }

@@ -6,7 +6,7 @@ import { solveIntercept } from '../../sim/intercept.ts';
 import { MISSION_CONFIG, MVP_CONFIG, WEAPON_CONFIG } from '../../shared/config.ts';
 import type { MissionState, ModelId, WeaponState } from '../../shared/types.ts';
 
-export interface FlightInput { yaw: number; pitch: number; roll: number; throttle: number; boost: boolean; fire: boolean; torpedo?: boolean }
+export interface FlightInput { yaw: number; pitch: number; roll: number; throttle: number; boost: boolean; fire: boolean; torpedo?: boolean; jump?: boolean; shield?: boolean }
 export const NEUTRAL_INPUT: FlightInput = { yaw: 0, pitch: 0, roll: 0, throttle: 0, boost: false, fire: false };
 export interface Fighter {
   id: string; model: ModelId; team: 'republic' | 'separatist'; position: THREE.Vector3; previous: THREE.Vector3;
@@ -14,7 +14,11 @@ export interface Fighter {
   weapon: WeaponState; cooldown: number; evadingUntil: number; phase: number; invulnerable: number;
 }
 export const TORPEDO_CONFIG = { lockTime: 2, cooldown: 18, range: 1200, cone: Math.PI / 12, speed: 330, turnRate: 1.8, lifetime: 7, damage: 120 } as const;
-export interface Bolt { targetId?: string; id: number; team: Fighter['team']; owner: string; position: THREE.Vector3; previous: THREE.Vector3; velocity: THREE.Vector3; life: number; damage: number }
+export const PLAYER_SHIELD_CONFIG = { duration: 5, cooldown: 30 } as const;
+export const JUMP_CONFIG = { distance: 2500, cooldown: 10, clearance: 180 } as const;
+export interface AssaultShip { model: THREE.Group; position: THREE.Vector3; bounds: THREE.Box3; generator: Fighter; bridge: Fighter; guns: EnemyGun[]; launched: number; launchTime: number; destroyed: boolean; }
+export interface EnemyGun extends Fighter { direction: THREE.Vector3; flash: number; heavy: boolean; }
+export interface Bolt { capital?: boolean; targetId?: string; id: number; team: Fighter['team']; owner: string; position: THREE.Vector3; previous: THREE.Vector3; velocity: THREE.Vector3; life: number; damage: number }
 export interface CarrierTurret { id: string; position: THREE.Vector3; direction: THREE.Vector3; cooldown: number; flash: number; targetId: string | null; aim: THREE.Vector3 | null; scanAt: number }
 export type WorldEvent = { type: 'explosion' | 'impact' | 'player-hit' | 'shot' | 'carrier-shot'; position: THREE.Vector3; enemy: boolean; size?: number };
 const FORWARD = new THREE.Vector3(0, 0, -1);
@@ -47,28 +51,39 @@ export function segmentSphere(start: THREE.Vector3, end: THREE.Vector3, center: 
 export class FlightWorld {
   readonly carrier: THREE.Object3D;
   readonly frigate: THREE.Group;
+  readonly capitalShips: AssaultShip[] = [];
   readonly generator: Fighter;
   readonly bridge: Fighter;
+  readonly enemyGuns: EnemyGun[] = [];
+  shieldTime = 0;
+  shieldCooldown = 0;
+  private shieldHeld = false;
+  get playerShieldActive() { return this.shieldTime > 0 && this.player.health > 0; }
+  jumpCooldown = 0;
+  jumpFlash = 0;
+  private jumpHeld = false;
+  get exposedGuns() {return this.stage!=='defense'&&this.stage!=='arrival'&&this.stage!=='destroyed'?this.capitalShips.filter(s=>!s.destroyed&&s.generator.health<=0).flatMap(s=>s.guns.filter(g=>g.health>0)):[];}
   stage: 'defense' | 'arrival' | 'shield' | 'launch' | 'assault' | 'destroyed' = 'defense';
   stageTime = 0;
   hangarOpen = 0;
   private reinforcementTimer = 0;
   private reinforcementSequence = 0;
-  private launched = 0;
-  private frigateBounds: THREE.Box3;
+
+
   readonly shieldRadii = new THREE.Vector3(260,150,470);
-  get shieldCenter() { return this.frigate.position.clone().add(new THREE.Vector3(0,-40,0)); }
+  shieldCenterFor(ship: AssaultShip) { return ship.position.clone().add(new THREE.Vector3(0,-40,0)); }
+  get shieldCenter() { return this.shieldCenterFor(this.capitalShips[0]!); }
   get shieldActive() { return this.stage !== 'defense' && this.stage !== 'destroyed' && this.generator.health > 0; }
-  get objectives() { return this.stage === 'defense' || this.stage === 'arrival' || this.stage === 'destroyed' ? [] : this.generator.health > 0 ? [this.generator] : this.bridge.health > 0 ? [this.bridge] : []; }
-  get attackTargets() { return [...this.enemies, ...this.objectives]; }
+  get objectives() { return this.stage === 'defense' || this.stage === 'arrival' || this.stage === 'destroyed' ? [] : this.capitalShips.filter(s=>!s.destroyed).map(s=>s.generator.health>0?s.generator:s.bridge).filter(f=>f.health>0); }
+  get attackTargets() { return [...this.enemies, ...this.objectives,...this.exposedGuns]; }
   get bombers() { return this.fighters.filter(f=>f.model==='ywing'&&f.health>0); }
   get objectiveText() {
     if(this.stage==='defense') return '清除三波敌机 · 守住狩猎者级';
-    if(this.stage==='arrival') return '警报：慷慨级正在跃迁进入战场';
+    if(this.stage==='arrival') return '警报：两艘慷慨级正在跃迁进入战场';
     if(this.stage==='shield') return '击毁外露护盾发生器 · 舰体受屏障保护';
     if(this.stage==='launch') return '护盾已瓦解 · 机库门开启，轰炸编队出击';
     if(this.stage==='assault') return this.bombers.length ? '护航Y翼轰炸机，或直接攻击敌舰舰桥' : '轰炸机已损失 · 亲自摧毁敌舰舰桥';
-    return '慷慨级已摧毁';
+    return '两艘慷慨级已摧毁';
   }
   readonly player: Fighter;
   readonly fighters: Fighter[];
@@ -80,7 +95,9 @@ export class FlightWorld {
   playerCollisionVersion = 0;
   readonly collisionNormal = new THREE.Vector3(0, 1, 0);
   turretShots = 0;
-  torpedoCooldown = 0;
+  readonly torpedoCooldowns = [0, 0];
+  get torpedoCooldown() { return Math.min(...this.torpedoCooldowns); }
+  get torpedoCharges() { return this.torpedoCooldowns.filter(t => t === 0).length; }
   torpedoLock = 0;
   torpedoTarget: string | null = null;
   private torpedoHeld = false;
@@ -97,17 +114,29 @@ export class FlightWorld {
   private ray = new THREE.Raycaster();
   private carrierBounds: THREE.Box3;
 
-  constructor(carrier: THREE.Object3D, frigate = createMunificentModel()) {
+  constructor(carrier: THREE.Object3D, frigate = createMunificentModel(false), secondFrigate = createMunificentModel(false)) {
     this.carrier = carrier;
-    this.frigate = frigate; frigate.position.set(0,0,-5000);frigate.rotation.y=Math.PI;frigate.updateMatrixWorld(true);
-    this.frigateBounds = new THREE.Box3().setFromObject(frigate);
-    const point=(key:string)=>new THREE.Vector3().fromArray(frigate.userData[key]).applyMatrix4(frigate.matrixWorld);
-    this.generator=fighter('shield-generator','munificent','separatist',point('generator'),360);this.generator.radius=28;this.generator.speed=0;
-    this.bridge=fighter('frigate-bridge','munificent','separatist',point('bridge'),1800);this.bridge.radius=44;this.bridge.speed=0;
+    this.frigate = frigate;
+    for(const [index,model] of [frigate,secondFrigate].entries()) {
+      const position=new THREE.Vector3(index===0?-650:650,0,index===0?-5000:-5250);
+      model.position.copy(position);model.scale.setScalar(1);model.rotation.y=Math.PI;model.updateMatrixWorld(true);
+      const point=(key:string)=>new THREE.Vector3().fromArray(model.userData[key]).applyMatrix4(model.matrixWorld);
+      const suffix=index===0?'':'-2';
+      const generator=fighter('shield-generator'+suffix,'munificent','separatist',point('generator'),360);generator.radius=28;generator.speed=0;
+      const bridge=fighter('frigate-bridge'+suffix,'munificent','separatist',point('bridge'),1800);bridge.radius=44;bridge.speed=0;
+      const guns=(model.userData.gunMounts as number[][]).map((mount,i)=>{
+        const gun=fighter('enemy-gun-'+(index*6+i+1),'munificent','separatist',new THREE.Vector3().fromArray(mount).applyMatrix4(model.matrixWorld),150);
+        gun.radius=20;gun.speed=0;gun.cooldown=.4+i*.6+index;
+        return {...gun,direction:new THREE.Vector3(0,0,1),flash:0,heavy:i%3===0};
+      });
+      this.enemyGuns.push(...guns);
+      this.capitalShips.push({model,position,bounds:new THREE.Box3().setFromObject(model),generator,bridge,guns,launched:0,launchTime:-1,destroyed:false});
+    }
+    this.generator=this.capitalShips[0]!.generator;this.bridge=this.capitalShips[0]!.bridge;
     carrier.updateMatrixWorld(true);
     this.carrierBounds = new THREE.Box3().setFromObject(carrier);
     this.player = fighter('player', 'eta2', 'republic', new THREE.Vector3(110, 95, 300), 100);
-    this.fighters = [this.player, ...Array.from({length:MVP_CONFIG.friendlies},(_,i)=>fighter(`wing-${i+1}`, 'arc170', 'republic', new THREE.Vector3(110 + (i%2===0?-1:1)*(48+Math.floor(i/2)*40), 107+Math.floor(i/2)*15, 242-Math.floor(i/2)*36), 180))];
+    this.fighters = [this.player, ...Array.from({length:MVP_CONFIG.friendlies},(_,i)=>fighter(`wing-${i+1}`, 'arc170', 'republic', new THREE.Vector3(110 + (i%2===0?-1:1)*(48+Math.floor(i/2)*40), 107+Math.floor(i/2)*15, 242-Math.floor(i/2)*36), 120))];
     for (const side of [-1,1]) for(let i=0;i<4;i++) this.turrets.push({id:`turret-${side}-${i}`,position:new THREE.Vector3(side*(111+i*17),-18.25,142+i*57),direction:FORWARD.clone(),cooldown:0.3+i*0.3+(side+1)*0.1,flash:0,targetId:null,aim:null,scanAt:i*0.04});
   }
 
@@ -116,9 +145,22 @@ export class FlightWorld {
   get terminal() { return this.mission.phase === 'won' || this.mission.phase === 'lost'; }
   forward(f: Fighter) { return FORWARD.clone().applyQuaternion(f.rotation); }
 
-  selectNext() {
-    const enemies = this.attackTargets.sort((a, b) => a.position.distanceToSquared(this.player.position) - b.position.distanceToSquared(this.player.position));
-    this.targetId = enemies[(enemies.findIndex(f => f.id === this.targetId) + 1) % enemies.length]?.id ?? null;
+  selectNext(camera?: THREE.PerspectiveCamera) {
+    const candidates = this.attackTargets.map(target => {
+      const offset = target.position.clone().sub(camera?.position ?? this.player.position);
+      if (camera) offset.applyQuaternion(camera.quaternion.clone().invert());
+      else offset.applyQuaternion(this.player.rotation.clone().invert());
+      const depth = -offset.z;
+      const projected = camera ? target.position.clone().project(camera) : null;
+      const visible = depth > 0 && (!projected || (Math.abs(projected.x) <= 1 && Math.abs(projected.y) <= 1));
+      // Pixel distance from the real camera's screen center; aspect corrects NDC.
+      const score = projected && depth > 0
+        ? Math.hypot(projected.x * camera!.aspect, projected.y)
+        : Math.atan2(Math.hypot(offset.x, offset.y), depth);
+      return { target, visible, score, distance: offset.lengthSq() };
+    });
+    candidates.sort((a, b) => Number(b.visible) - Number(a.visible) || a.score - b.score || a.distance - b.distance);
+    this.targetId = candidates[0]?.target.id ?? null;
   }
 
   command(order: 'focus' | 'follow') {
@@ -136,7 +178,7 @@ export class FlightWorld {
     this.ray.near = 0.001; this.ray.far = distance + extra;
     const hits: THREE.Intersection[] = [];
     if(this.ray.ray.intersectsBox(this.carrierBounds))hits.push(...this.ray.intersectObject(this.carrier,true));
-    if(this.stage!=='defense'&&this.stage!=='arrival'&&this.stage!=='destroyed'&&this.ray.ray.intersectsBox(this.frigateBounds))hits.push(...this.ray.intersectObject(this.frigate,true));
+    if(this.stage!=='defense'&&this.stage!=='arrival'&&this.stage!=='destroyed')for(const ship of this.capitalShips)if(!ship.destroyed&&this.ray.ray.intersectsBox(ship.bounds))hits.push(...this.ray.intersectObject(ship.model,true));
     return hits.sort((a,b)=>a.distance-b.distance)[0]??null;
   }
 
@@ -148,9 +190,11 @@ export class FlightWorld {
     this.hitFlash = Math.max(0, this.hitFlash - dt * 2);
     this.hitConfirm = Math.max(0, this.hitConfirm - dt * 4);
     for (const f of this.fighters) { f.previous.copy(f.position); f.invulnerable = Math.max(0, f.invulnerable - dt); }
+    this.updatePlayerShield(dt, !!input.shield);
     this.movePlayer(dt, input);
     for (const f of this.fighters) if (f.id !== 'player' && f.health > 0) this.moveAI(f, dt);
     this.updateTurrets(dt);
+    this.updateEnemyGuns(dt);
     const weapon = advanceWeapon(this.player.weapon, dt, input.fire, WEAPON_CONFIG);
     this.player.weapon = weapon.state;
     if (weapon.fired && this.player.health > 0) {
@@ -223,6 +267,7 @@ export class FlightWorld {
 
   private movePlayer(dt: number, input: FlightInput) {
     const p = this.player;
+    if(this.updateJump(dt,!!input.jump))return;
     const clamp = THREE.MathUtils.clamp;
     p.rotation.multiply(new THREE.Quaternion().setFromAxisAngle(Y, -clamp(input.yaw, -1, 1) * 1.15 * dt));
     p.rotation.multiply(new THREE.Quaternion().setFromAxisAngle(X, clamp(input.pitch, -1, 1) * 1.0 * dt));
@@ -277,7 +322,7 @@ export class FlightWorld {
       const enemies = this.enemies;
       target = (this.wingOrder === 'focus' ? enemies.find(e => e.id === this.focusId) : null) ?? enemies.sort((a, b) => a.position.distanceToSquared(f.position) - b.position.distanceToSquared(f.position))[0] ?? null;
       const index=Number(f.id.split('-')[1])-1;
-      const anchor=index>=4&&this.bombers.length?this.bombers[0]!:this.player;
+      const anchor=index>=4&&this.bombers.length?(this.bombers.find(b=>b.phase===f.phase)??this.bombers[0]!):this.player;
       const formation = new THREE.Vector3((index%2===0?-1:1)*(48+Math.floor(index/2)*38), 12+Math.floor(index/2)*14, -55-Math.floor(index/2)*38).applyQuaternion(anchor.rotation).add(anchor.position);
       destination = target && this.wingOrder !== 'follow' ? target.position.clone() : formation;
       f.speed = target && this.wingOrder !== 'follow' ? 130 : THREE.MathUtils.clamp(anchor.speed + formation.clone().sub(f.position).dot(this.forward(anchor)) * 1.5, 65, 200);
@@ -301,7 +346,7 @@ export class FlightWorld {
     const shield=this.shieldContact(f.previous,f.position);
     if(shield!==null) {
       const hit=f.previous.clone().lerp(f.position,shield);
-      const normal=hit.clone().sub(this.shieldCenter).divide(this.shieldRadii).divide(this.shieldRadii).normalize();
+      const normal=hit.clone().sub(this.shieldCenterFor(this.shieldShip(f.previous,f.position)!.ship)).divide(this.shieldRadii).divide(this.shieldRadii).normalize();
       f.position.copy(hit).addScaledVector(normal,f.radius+8);f.previous.copy(f.position);
       const direction=this.forward(f).reflect(normal);f.rotation.setFromRotationMatrix(new THREE.Matrix4().lookAt(new THREE.Vector3(),direction,Y));
       if(f.id==='player'){this.playerCollisionVersion++;this.collisionNormal.copy(normal);this.message='粒子屏障阻挡通行，先攻击外露发生器。';}
@@ -319,6 +364,11 @@ export class FlightWorld {
     f.rotation.setFromRotationMatrix(new THREE.Matrix4().lookAt(new THREE.Vector3(), direction, Y));
     if (f.id==='player') {
       this.playerCollisionVersion++; this.collisionNormal.copy(normal);
+      if (this.playerShieldActive) {
+        this.message = '护盾缓冲撞击，座机已弹开。';
+        this.events.push({type:'impact',position:hit.point.clone(),enemy:false});
+        return;
+      }
       f.health = 0;
       this.hitFlash = 1; this.message = this.stage==='defense'?'撞击母舰，座机已毁。':'撞击舰体，座机已毁。';
       this.events.push({ type: 'explosion', position: hit.point.clone(), enemy: false });
@@ -330,9 +380,82 @@ export class FlightWorld {
     }
   }
 
+  private updatePlayerShield(dt: number, pressed: boolean) {
+    this.shieldTime = Math.max(0, this.shieldTime - dt);
+    this.shieldCooldown = Math.max(0, this.shieldCooldown - dt);
+    const trigger = pressed && !this.shieldHeld;
+    this.shieldHeld = pressed;
+    if (trigger && this.shieldCooldown === 0 && this.player.health > 0) {
+      this.shieldTime = PLAYER_SHIELD_CONFIG.duration;
+      this.shieldCooldown = PLAYER_SHIELD_CONFIG.cooldown;
+      this.message = '主动护盾开启 · 激光免伤与撞击缓冲 5 秒';
+      this.events.push({type:'carrier-shot',position:this.player.position.clone(),enemy:false});
+    }
+  }
+
+  private updateJump(dt:number,pressed:boolean) {
+    this.jumpCooldown=Math.max(0,this.jumpCooldown-dt);this.jumpFlash=Math.max(0,this.jumpFlash-dt*2);
+    const trigger=pressed&&!this.jumpHeld;this.jumpHeld=pressed;
+    if(!trigger||this.jumpCooldown>0||this.player.health<=0)return false;
+    const p=this.player,direction=this.forward(p),start=p.position.clone(),end=start.clone().addScaledVector(direction,JUMP_CONFIG.distance);
+    let distance=JUMP_CONFIG.distance as number;
+    const right=new THREE.Vector3(1,0,0).applyQuaternion(p.rotation).multiplyScalar(12),up=new THREE.Vector3(0,1,0).applyQuaternion(p.rotation).multiplyScalar(12);
+    for(const offset of [new THREE.Vector3(),right,right.clone().negate(),up,up.clone().negate()]){
+      const a=start.clone().add(offset),b=end.clone().add(offset),hit=this.hullHit(a,b),shield=this.shieldContact(a,b);
+      if(hit)distance=Math.min(distance,hit.distance-JUMP_CONFIG.clearance);
+      if(shield!==null)distance=Math.min(distance,shield*JUMP_CONFIG.distance-JUMP_CONFIG.clearance);
+    }
+    const center=this.stage==='defense'?new THREE.Vector3():new THREE.Vector3(0,0,-2500),radius=this.stage==='defense'?2200:4000;
+    const offset=start.clone().sub(center),b=offset.dot(direction),disc=b*b-offset.lengthSq()+radius*radius;
+    distance=Math.min(distance,disc>=0?-b+Math.sqrt(disc):0);
+    if(distance<100){this.message='跃迁路径受阻，请改变朝向。';return false;}
+    p.position.addScaledVector(direction,distance);p.previous.copy(p.position);
+    this.playerCollisionVersion++;this.collisionNormal.copy(direction).negate();
+    this.jumpCooldown=JUMP_CONFIG.cooldown;this.jumpFlash=1;this.torpedoLock=0;this.torpedoTarget=null;
+    this.message='短程跃迁完成 · '+Math.round(distance)+' 米';this.events.push({type:'carrier-shot',position:p.position.clone(),enemy:false});return true;
+  }
+
+  private updateEnemyGuns(dt:number) {
+    if(this.stage==='defense'||this.stage==='arrival'||this.stage==='destroyed')return;
+    for(const gun of this.enemyGuns){
+      gun.flash=Math.max(0,gun.flash-dt);if(gun.health<=0)continue;gun.cooldown-=dt;
+      let point:THREE.Vector3|null=null;
+      const speed=gun.heavy?1600:650;
+      if(gun.heavy)point=new THREE.Vector3(Math.sign(gun.position.x)*105,-40,-250);
+      else {
+        const target=this.fighters.filter(f=>f.team==='republic'&&f.health>0&&f.position.distanceTo(gun.position)<1500).sort((a,b)=>a.position.distanceToSquared(gun.position)-b.position.distanceToSquared(gun.position))[0];
+        if(target){const aim=solveIntercept(gun.position,target.position,this.forward(target).multiplyScalar(target.speed),speed,3);if(aim)point=new THREE.Vector3(aim.point.x,aim.point.y,aim.point.z);}
+      }
+      if(!point)continue;
+      const desired=point.clone().sub(gun.position).normalize();gun.direction.lerp(desired,1-Math.exp(-dt*4)).normalize();
+      if(gun.cooldown>0||gun.direction.dot(desired)<.995||this.bolts.length>=192)continue;
+      const position=gun.position.clone().addScaledVector(gun.direction,30);
+      // Test the entire path up to the target's surface; never shoot through own hull.
+      if(this.hullHit(gun.position,position))continue;
+      if(!gun.heavy&&this.hullHit(position,point.clone().addScaledVector(desired,-12)))continue;
+      this.bolts.push({id:++this.boltSequence,owner:gun.id,team:'separatist',capital:gun.heavy,position,previous:position.clone(),velocity:gun.direction.clone().applyAxisAngle(Y,gun.heavy?0:Math.sin(this.time*3+Number(gun.id.split('-').at(-1)))*.02).multiplyScalar(speed),life:gun.heavy?5:3,damage:gun.heavy?30:12});
+      gun.cooldown=gun.heavy?6:2.4;gun.flash=.15;
+      if(gun.heavy)this.events.push({type:'carrier-shot',position:position.clone(),enemy:true});
+    }
+  }
+
   private updateTurrets(dt: number) {
     for(const turret of this.turrets) {
       turret.cooldown-=dt; turret.flash=Math.max(0,turret.flash-dt);
+      if(this.stage!=='defense'&&this.stage!=='arrival'&&this.stage!=='destroyed') {
+        const alive=this.capitalShips.filter(s=>!s.destroyed);
+        const ship=alive[(this.turrets.indexOf(turret)%2)%alive.length];if(!ship)continue;
+        const direction=ship.bridge.position.clone().sub(turret.position).normalize();
+        turret.direction.lerp(direction,1-Math.exp(-dt*2.8)).normalize();turret.targetId=ship.bridge.id;
+        if(turret.cooldown<=0&&turret.direction.dot(direction)>.995&&this.bolts.length<192){
+          const position=turret.position.clone().addScaledVector(turret.direction,38);
+          if(!this.hullHit(turret.position,position)){
+            this.bolts.push({id:++this.boltSequence,owner:turret.id,team:'republic',capital:true,position,previous:position.clone(),velocity:direction.multiplyScalar(1600),life:5,damage:6});
+            turret.cooldown=5;turret.flash=.13;this.turretShots++;
+          }
+        }
+        continue;
+      }
       if(this.time>=turret.scanAt) {
       turret.scanAt=this.time+0.25;
       const candidates=this.enemies.filter(e=>e.position.distanceTo(turret.position)<1250 && e.position.y>turret.position.y+8)
@@ -375,51 +498,68 @@ export class FlightWorld {
     this.bolts.push({ id: ++this.boltSequence, owner: f.id, team: f.team, position, previous: position.clone(), velocity: direction.clone().multiplyScalar(PROJECTILE_SPEED), life: PROJECTILE_LIFETIME, damage });
   }
 
-  shieldContact(start: THREE.Vector3,end: THREE.Vector3) {
-    if(!this.shieldActive||this.stage==='arrival')return null;
-    return segmentSphere(start.clone().sub(this.shieldCenter).divide(this.shieldRadii),end.clone().sub(this.shieldCenter).divide(this.shieldRadii),new THREE.Vector3(),1);
+  shieldShip(start: THREE.Vector3,end: THREE.Vector3) {
+    if(this.stage==='defense'||this.stage==='arrival'||this.stage==='destroyed')return null;
+    let closest: {ship:AssaultShip;t:number}|null=null;
+    for(const ship of this.capitalShips) {
+      if(ship.destroyed||ship.generator.health<=0)continue;
+      const center=this.shieldCenterFor(ship);
+      const t=segmentSphere(start.clone().sub(center).divide(this.shieldRadii),end.clone().sub(center).divide(this.shieldRadii),new THREE.Vector3(),1);
+      if(t!==null&&(!closest||t<closest.t))closest={ship,t};
+    }
+    return closest;
   }
+  shieldContact(start: THREE.Vector3,end: THREE.Vector3) {return this.shieldShip(start,end)?.t??null;}
 
   private updateAssault(dt: number) {
     if(this.player.health<=0||this.carrierHealth<=0){this.mission={...this.mission,phase:'lost',lossReason:this.player.health<=0?'player-destroyed':'carrier-destroyed'};return;}
     this.stageTime+=dt;
     if(this.stage==='arrival') {
-      if(this.stageTime>=4){this.stage='shield';this.stageTime=0;this.targetId=this.generator.id;this.message='外露护盾投射节点已标记。接近并摧毁它！';}
+      if(this.stageTime>=4){this.stage='shield';this.stageTime=0;this.targetId=this.generator.id;this.message='两艘慷慨级抵达！分别击破护盾，呼叫轰炸支援。';}
       return;
     }
-    if(this.generator.health<=0&&this.stage==='shield') {
-      this.stage='launch';this.stageTime=0;this.targetId=this.bridge.id;
-      this.events.push({type:'explosion',position:this.generator.position.clone(),enemy:true});
-      this.message='屏障瓦解！守望号机库开启，金色中队准备起飞。';
-    }
-    if(this.stage==='launch'||this.stage==='assault') {
-      this.hangarOpen=Math.min(1,this.hangarOpen+dt/4);
-      if(this.stage==='launch'&&this.stageTime>=4+this.launched*1.5&&this.launched<5) {
-        const i=this.launched++,isBomber=i<3;
-        const exit=new THREE.Vector3().fromArray(this.carrier.userData.hangarExit??[0,25,-150]);
-        exit.x+=(i%3-1)*13;exit.y+=10;
-        const f=fighter(isBomber?'gold-'+(i+1):'wing-'+(i+2),isBomber?'ywing':'arc170','republic',exit,isBomber?260:180);
-        f.radius=isBomber?9:7;f.phase=i;f.evadingUntil=this.time+4;this.fighters.push(f);
-        if(this.launched===5){this.stage='assault';this.stageTime=0;this.message='金色中队已出击！护航轰炸，或自行摧毁舰桥。';}
+    for(const [index,ship] of this.capitalShips.entries()) {
+      if(ship.generator.health<=0&&ship.launchTime<0) {
+        ship.launchTime=0;this.targetId=ship.bridge.id;
+        this.events.push({type:'explosion',position:ship.generator.position.clone(),enemy:true});
+        this.message='敌舰 '+(index+1)+' 护盾瓦解：1架Y翼和2架护航机准备出击。';
+      }
+      if(ship.launchTime>=0&&ship.launched<3) {
+        ship.launchTime+=dt;
+        if(this.hangarOpen>=1&&ship.launchTime>=4+ship.launched*1.5) {
+          const i=ship.launched++,isBomber=i===0;
+          const exit=new THREE.Vector3().fromArray(this.carrier.userData.hangarExit??[0,25,-150]);
+          exit.x+=(index===0?-1:1)*20;exit.y+=10;
+          const f=fighter(isBomber?'gold-'+(index+1):'wing-'+(5+index*2+i-1),isBomber?'ywing':'arc170','republic',exit,isBomber?320:120);
+          f.radius=isBomber?9:7;f.phase=index;f.evadingUntil=this.time+4;this.fighters.push(f);
+        }
+      }
+      if(!ship.destroyed&&ship.bridge.health<=0&&ship.generator.health<=0) {
+        ship.destroyed=true;ship.guns.forEach(g=>g.health=0);
+        for(let i=0;i<8;i++)this.events.push({type:'explosion',position:ship.position.clone().add(new THREE.Vector3((i%2?1:-1)*90,40,-300+i*85)),enemy:true,size:150});
       }
     }
+    const triggered=this.capitalShips.filter(s=>s.launchTime>=0);
+    if(triggered.length){this.hangarOpen=Math.min(1,this.hangarOpen+dt/4);this.stage=triggered.some(s=>s.launched<3)?'launch':'assault';}
     this.reinforcementTimer-=dt;
     if(this.reinforcementTimer<=0){
       this.reinforcementTimer=22;
-      for(let i=0;i<Math.min(3,10-this.enemies.length);i++) {
+      for(const ship of this.capitalShips.filter(s=>!s.destroyed))for(let i=0;i<2&&this.enemies.length<10;i++) {
         const id=++this.reinforcementSequence;
-        const f=fighter('interceptor-'+id,'vulture','separatist',this.frigate.position.clone().add(new THREE.Vector3((i-1)*100,230,550)),90);
+        const f=fighter('interceptor-'+id,'vulture','separatist',ship.position.clone().add(new THREE.Vector3((i-.5)*150,230,550)),90);
         f.rotation.setFromAxisAngle(Y,Math.PI);f.phase=id;this.fighters.push(f);
       }
     }
-    if(this.bridge.health<=0&&this.generator.health<=0){
-      this.stage='destroyed';this.mission={...this.mission,phase:'won'};this.message='敌舰舰桥被摧毁，慷慨级失去作战能力！';
-      for(let i=0;i<8;i++)this.events.push({type:'explosion',position:this.frigate.position.clone().add(new THREE.Vector3((i%2?1:-1)*90,40,-300+i*85)),enemy:true,size:150});
+    if(this.capitalShips.every(s=>s.destroyed)){
+      this.stage='destroyed';this.mission={...this.mission,phase:'won'};this.message='两艘敌舰均已摧毁，航道已清空！';
     }
   }
 
   private moveBomber(f: Fighter,dt:number) {
-    const bridge=this.bridge;
+    const available=this.capitalShips.filter(s=>!s.destroyed&&s.generator.health<=0);
+    const ship=available.find(s=>s===this.capitalShips[f.phase])??available[0];
+    if(!ship){f.speed=155;this.steer(f,new THREE.Vector3((f.phase?1:-1)*800,350,-2500),dt);return;}
+    const bridge=ship.bridge;
     let destination: THREE.Vector3;
     if(f.position.z>-700)destination=new THREE.Vector3((f.phase-1)*45,200,-850);
     else if(f.position.distanceTo(bridge.position)<550||this.time<f.evadingUntil){
@@ -428,7 +568,7 @@ export class FlightWorld {
     } else destination=bridge.position.clone().add(new THREE.Vector3(0,100,250));
     f.speed=155;this.steer(f,destination,dt);f.cooldown-=dt;
     const delta=bridge.position.clone().sub(f.position);
-    if(!this.shieldActive&&f.cooldown<=0&&delta.length()<1100&&this.forward(f).dot(delta.clone().normalize())>.8&&!this.hullHit(f.position,this.targetSurface(bridge,f.position))&&this.bolts.length<192){
+    if(ship.generator.health<=0&&f.cooldown<=0&&delta.length()<1100&&this.forward(f).dot(delta.clone().normalize())>.8&&!this.hullHit(f.position,this.targetSurface(bridge,f.position))&&this.bolts.length<192){
       const position=this.muzzlePosition(f);
       this.bolts.push({id:++this.boltSequence,owner:f.id,team:'republic',targetId:bridge.id,position,previous:position.clone(),velocity:delta.normalize().multiplyScalar(330),life:7,damage:300});
       f.cooldown=7;this.events.push({type:'carrier-shot',position:position.clone(),enemy:false});
@@ -436,7 +576,7 @@ export class FlightWorld {
   }
 
   private updateTorpedo(dt: number, pressed: boolean) {
-    this.torpedoCooldown = Math.max(0, this.torpedoCooldown - dt);
+    for (let i = 0; i < this.torpedoCooldowns.length; i++) this.torpedoCooldowns[i] = Math.max(0, this.torpedoCooldowns[i]! - dt);
     const target = this.target;
     const delta = target?.position.clone().sub(this.player.position);
     const valid = this.player.health > 0 && this.torpedoCooldown === 0 && target && delta && delta.length() <= TORPEDO_CONFIG.range
@@ -452,7 +592,7 @@ export class FlightWorld {
       const position = this.muzzlePosition(this.player);
       this.bolts.push({ id: ++this.boltSequence, owner: 'player', team: 'republic', targetId: target.id,
         position, previous: position.clone(), velocity: this.forward(this.player).multiplyScalar(TORPEDO_CONFIG.speed), life: TORPEDO_CONFIG.lifetime, damage: TORPEDO_CONFIG.damage });
-      this.torpedoCooldown = TORPEDO_CONFIG.cooldown; this.torpedoLock = 0; this.torpedoTarget = null;
+      this.torpedoCooldowns[this.torpedoCooldowns.findIndex(t => t === 0)] = TORPEDO_CONFIG.cooldown; this.torpedoLock = 0; this.torpedoTarget = null;
       this.events.push({ type: 'carrier-shot', position: position.clone(), enemy: false });
       this.message = '质子鱼雷已发射！';
     }
@@ -476,25 +616,30 @@ export class FlightWorld {
       bolt.previous.copy(bolt.position); bolt.position.addScaledVector(bolt.velocity, dt); bolt.life -= dt;
       let firstT = Infinity;
       let victim: Fighter | null = null;
-      for (const f of [...this.fighters,...this.objectives]) {
+      for (const f of [...this.fighters,...this.objectives,...this.exposedGuns]) {
         if (f.team === bolt.team || f.health <= 0) continue;
         const start = bolt.previous.clone().sub(f.previous);
         const end = bolt.position.clone().sub(f.position);
         const t = segmentSphere(start, end, new THREE.Vector3(), f.radius + (bolt.owner === 'player' ? 2.2 : 0.2));
         if (t !== null && t < firstT) { firstT = t; victim = f; }
       }
-      const shield=this.shieldContact(bolt.previous,bolt.position);
+      const shield=bolt.owner.startsWith('enemy-gun-')?null:this.shieldContact(bolt.previous,bolt.position);
       if(shield!==null&&shield<firstT){
         this.events.push({type:'impact',position:bolt.previous.clone().lerp(bolt.position,shield),enemy:true});this.bolts.splice(i,1);continue;
       }
       const hull = this.hullHit(bolt.previous, bolt.position);
       const segmentLength = bolt.previous.distanceTo(bolt.position);
       if (hull && hull.distance / segmentLength < firstT) {
-        if (bolt.team === 'separatist' && hull.point.distanceTo(WEAK_POINT) < 105) this.carrierHealth = applyDamage(this.carrierHealth, bolt.damage * 1.2);
+        if (bolt.team === 'separatist' && (bolt.capital && hull.point.distanceTo(this.carrier.position)<850 || hull.point.distanceTo(WEAK_POINT) < 105)) this.carrierHealth = applyDamage(this.carrierHealth, bolt.damage * 1.2);
         this.events.push({ type: bolt.targetId ? 'explosion' : 'impact', position: hull.point.clone(), enemy: bolt.team === 'separatist' });
         bolt.life = 0;
       } else if (victim) {
+        if (victim.id === 'player' && this.playerShieldActive && bolt.team === 'separatist' && !bolt.targetId) {
+          this.events.push({type:'impact',position:bolt.previous.clone().lerp(bolt.position,firstT),enemy:false});
+          this.bolts.splice(i,1); continue;
+        }
         victim.health = applyDamage(victim.health, bolt.damage); bolt.life = 0;
+        if(victim.id.startsWith('enemy-gun-')&&victim.health===0)this.events.push({type:'explosion',position:victim.position.clone(),enemy:true,size:35});
         this.events.push({ type: bolt.targetId ? 'explosion' : 'impact', position: bolt.previous.clone().lerp(bolt.position, firstT), enemy: victim.team === 'separatist' });
         if (bolt.owner === 'player') this.hitConfirm = 1;
         if (victim.id === 'player') { this.hitFlash = 1; this.events.push({ type: 'player-hit', position: victim.position.clone(), enemy: true }); }

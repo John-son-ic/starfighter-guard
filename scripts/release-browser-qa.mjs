@@ -27,9 +27,9 @@ await withBrowser(process.argv[2] ?? 'c04-release', async ({ call, evaluate, cap
   assert.equal(await evaluate('document.documentElement.dataset.flightState'), 'menu');
   await capture('release-briefing');
   await evaluate(`document.querySelector('#launch-button').click()`);
-  await call('Input.dispatchKeyEvent', { type: 'keyDown', code: 'Space', key: ' ' });
+  await call('Input.dispatchMouseEvent', {type:'mousePressed',x:720,y:500,button:'left',clickCount:1});
   await evaluate('new Promise(r=>setTimeout(r,750))');
-  await call('Input.dispatchKeyEvent', { type: 'keyUp', code: 'Space', key: ' ' });
+  await call('Input.dispatchMouseEvent', {type:'mouseReleased',x:720,y:500,button:'left',clickCount:1});
   assert.notEqual(await evaluate(`document.querySelector('#heat-value').textContent`), '0%');
   await call('Input.dispatchKeyEvent', { type: 'keyDown', code: 'Digit2', key: '2' });
   await call('Input.dispatchKeyEvent', { type: 'keyUp', code: 'Digit2', key: '2' });
@@ -43,5 +43,5 @@ await withBrowser(process.argv[2] ?? 'c04-release', async ({ call, evaluate, cap
   assert.equal(await evaluate('document.documentElement.dataset.model'), 'eta2');
   await capture('release-models');
   assert.deepEqual(externalRequests, []); assert.deepEqual(failedRequests, []); assert.deepEqual(pageErrors, []);
-  return { checks: ['portable production package in a path with spaces', 'briefing renders', 'actual keyboard shooting changes weapon heat', 'wing recall and pause work', 'model gallery and switching work', 'production hides QA world API', 'all external HTTP(S) requests blocked throughout', 'no external request attempted'], packagePath: pack.outputPath, files: pack.fileCount, bytes: pack.totalBytes, origins: [...origins], externalRequests, failedRequests, note: 'External network requests were blocked in the test page; OS networking was not disabled. This is not a human double-click, hardware FPS or other-browser acceptance test.' };
+  return { checks: ['portable production package in a path with spaces', 'briefing renders', 'actual mouse shooting changes weapon heat', 'wing recall and pause work', 'model gallery and switching work', 'production hides QA world API', 'all external HTTP(S) requests blocked throughout', 'no external request attempted'], packagePath: pack.outputPath, files: pack.fileCount, bytes: pack.totalBytes, origins: [...origins], externalRequests, failedRequests, note: 'External network requests were blocked in the test page; OS networking was not disabled. This is not a human double-click, hardware FPS or other-browser acceptance test.' };
 }, { serverArgs: [join(pack.outputPath, 'scripts/serve-release.mjs'), '--port', '5188'], readyPattern: /游戏已就绪/ });

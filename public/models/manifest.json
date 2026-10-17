@@ -10,13 +10,13 @@
       "source": "src/visual/models/munificent.ts",
       "lengthMeters": 825,
       "dimensionsMeters": [
-        413.8246765136719,
-        280.3896484375,
+        413.57232666015625,
+        286.7587890625,
         825
       ],
-      "triangles": 4204,
+      "triangles": 13572,
       "materialBatches": 8,
-      "bytes": 309364
+      "bytes": 984188
     },
     {
       "id": "ywing",

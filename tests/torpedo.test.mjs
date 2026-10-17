@@ -10,7 +10,7 @@ function setup(){
  e.position.set(0,100,-500);e.previous.copy(e.position);e.rotation.identity();e.speed=110;
  w.targetId=e.id;w.bolts.length=0;w.events.length=0;return {w,e};
 }
-test('torpedo requires continuous same-target lock, rejects range/cone/occlusion, and cooldown blocks shots',()=>{
+test('torpedo requires continuous same-target lock, rejects range/cone/occlusion, and a second missile still needs a fresh lock',()=>{
  const {w,e}=setup();
  w.updateTorpedo(1,true);assert.equal(w.bolts.length,0);
  w.updateTorpedo(1,false);assert.equal(w.torpedoLock,2);
@@ -19,7 +19,7 @@ test('torpedo requires continuous same-target lock, rejects range/cone/occlusion
  e.position.set(0,100,-500);w.updateTorpedo(1,false);
  w.targetId=null;w.updateTorpedo(.1,false);assert.equal(w.torpedoLock,0);
  w.targetId=e.id;w.updateTorpedo(2,false);w.updateTorpedo(.01,true);
- assert.equal(w.bolts.length,1);assert.equal(w.torpedoCooldown,C.cooldown);
+ assert.equal(w.bolts.length,1);assert.equal(w.torpedoCooldown,0);assert.deepEqual(w.torpedoCooldowns,[C.cooldown,0]);
  w.updateTorpedo(.1,false);w.updateTorpedo(.1,true);assert.equal(w.bolts.length,1);
  w.updateTorpedo(18,true);assert.equal(w.bolts.length,1,'held key cannot auto-fire');
  const blocker=new Mesh(new BoxGeometry(100,100,10),new MeshBasicMaterial());blocker.position.set(0,100,-250);
@@ -47,4 +47,18 @@ test('torpedo is stopped by hull and survives loss of its target without retarge
  for(let i=0;i<60&&blocked.bolts.length;i++)blocked.updateBolts(1/60);
  assert.equal(blocked.bolts.length,0);assert.ok(blocked.events.some(e=>e.type==='explosion'));assert.equal(blocked.carrierHealth,4000);
  wall.geometry.dispose();wall.material.dispose();
+});
+
+test('two torpedoes recharge independently and cannot fire a third until a slot recovers',()=>{
+ const {w}=setup();
+ w.updateTorpedo(2,false);w.updateTorpedo(0,true);
+ assert.deepEqual(w.torpedoCooldowns,[18,0]);assert.equal(w.torpedoCharges,1);
+ w.updateTorpedo(2,false);w.updateTorpedo(0,true);
+ assert.equal(w.bolts.length,2);assert.deepEqual(w.torpedoCooldowns,[16,18]);assert.equal(w.torpedoCharges,0);
+ w.updateTorpedo(2,false);w.updateTorpedo(0,true);assert.equal(w.bolts.length,2);assert.equal(w.torpedoLock,0);
+ w.updateTorpedo(14,false);assert.deepEqual(w.torpedoCooldowns,[0,2]);assert.equal(w.torpedoCharges,1);
+ w.updateTorpedo(0,true);assert.equal(w.bolts.length,3);assert.deepEqual(w.torpedoCooldowns,[18,2]);
+ w.updateTorpedo(2,false);assert.deepEqual(w.torpedoCooldowns,[16,0]);
+ w.updateTorpedo(0,true);assert.deepEqual(w.torpedoCooldowns,[16,18]);assert.equal(w.bolts.length,4);
+ const fresh=new FlightWorld(new Group());assert.deepEqual(fresh.torpedoCooldowns,[0,0]);assert.equal(fresh.torpedoCharges,2);
 });
