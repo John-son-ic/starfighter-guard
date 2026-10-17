@@ -3,11 +3,12 @@ import { PlayerExhaust } from './exhaust.ts';
 import * as THREE from 'three';
 import { MODEL_CATALOG } from '../../visual/models/index.ts';
 import { disposeModel } from '../../visual/models/primitives.ts';
-import { FlightWorld, WEAK_POINT } from './world.ts';
+import { FlightWorld, WEAK_POINT, CAPITAL_ROLES, isEnemyGun } from './world.ts';
 import type { Fighter, WorldEvent } from './world.ts';
 import { createVenatorModel } from '../../visual/models/venator.ts';
 import { createCarrierTurret } from '../../visual/models/carrier-turret.ts';
 import { safeChaseCamera } from './camera.ts';
+import { CapitalDamageEffects } from './capital-effects.ts';
 
 export class FlightScene {
   readonly scene = new THREE.Scene();
@@ -41,6 +42,7 @@ export class FlightScene {
     fragmentShader:'uniform float time;varying vec3 n;varying vec3 v;void main(){float rim=pow(1.-abs(dot(normalize(n),normalize(v))),2.);gl_FragColor=vec4(.25,.8,1.,.015+rim*(.32+.04*sin(time*8.)));}'}));
   private ready = false;
   private exhaust = new PlayerExhaust();
+  private capitalEffects = new CapitalDamageEffects();
 
   constructor(viewport: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -53,7 +55,7 @@ export class FlightScene {
     this.scene.add(new THREE.HemisphereLight(0xb7d8ee, 0x152638, 1.3));
     const light = new THREE.DirectionalLight(0xffedcf, 2.8); light.position.set(-1600, 2200, -900); this.scene.add(light);
     const rim = new THREE.DirectionalLight(0x436c9c, 1.2); rim.position.set(600, -500, 1200); this.scene.add(rim);
-    this.scene.add(this.playerShield);
+    this.scene.add(this.playerShield,this.capitalEffects.root);
     this.scene.add(this.carrier, this.exhaust.root,this.frigate,this.barrier,this.relay,this.bridgeBeacon);
     const particlePositions=new Float32Array(900*3);
     for(let i=0;i<900;i++){const y=1-2*(i+.5)/900,a=i*2.399963,r=Math.sqrt(1-y*y);particlePositions.set([r*Math.cos(a)*260,y*150,r*Math.sin(a)*470],i*3);}
@@ -115,20 +117,25 @@ export class FlightScene {
   }
 
   render(world: FlightWorld, dt: number, interpolation = 1) {
+    this.capitalEffects.update(world,dt);
     for(const [index,ship] of world.capitalShips.entries()) {
       const model=index===0?this.frigate:this.secondFrigate;
       const fx=index===0?{barrier:this.barrier,particles:this.shieldParticles,relay:this.relay,bridge:this.bridgeBeacon}:this.secondEffects;
-      model.visible=world.stage!=='defense'&&!ship.destroyed;
+      const deathAge=this.capitalEffects.deathAges[index]!;
+      model.visible=world.stage!=='defense'&&(!ship.destroyed||deathAge<4);
       model.position.copy(ship.position);
+      model.rotation.z=ship.destroyed?deathAge*.05:0;
+      if(ship.destroyed)model.position.y-=deathAge*18;
+      model.traverse(o=>{if(o instanceof THREE.Mesh){const materials=Array.isArray(o.material)?o.material:[o.material];for(const m of materials){if(m.transparent!==ship.destroyed){m.transparent=ship.destroyed;m.needsUpdate=true;}m.opacity=ship.destroyed?Math.max(0,1-deathAge/4):1;}}});
       if(world.stage==='arrival')model.position.z-=Math.pow(1-world.stageTime/4,3)*14000;
       model.scale.set(1,1,world.stage==='arrival'?1+(1-world.stageTime/4)*3:1);model.updateMatrixWorld(true);
-      fx.barrier.visible=fx.particles.visible=model.visible&&world.stage!=='arrival'&&ship.generator.health>0;
+      fx.barrier.visible=fx.particles.visible=model.visible&&!ship.destroyed&&world.stage!=='arrival'&&ship.generator.health>0;
       fx.barrier.position.copy(world.shieldCenterFor(ship));fx.barrier.scale.copy(world.shieldRadii);
       fx.particles.position.copy(world.shieldCenterFor(ship));
       (fx.particles.material as THREE.PointsMaterial).opacity=.5+.15*Math.sin(world.time*3);
       (fx.barrier.material as THREE.ShaderMaterial).uniforms.time!.value=world.time;
       fx.relay.visible=model.visible&&world.stage!=='arrival'&&ship.generator.health>0;fx.relay.position.copy(ship.generator.position);
-      fx.bridge.visible=model.visible&&world.stage!=='arrival'&&ship.generator.health<=0;fx.bridge.position.copy(ship.bridge.position);
+      fx.bridge.visible=model.visible&&!ship.destroyed&&world.stage!=='arrival'&&ship.generator.health<=0;fx.bridge.position.copy(ship.bridge.position);
     }
     for(let i=0;i<2;i++){const door=this.carrier.getObjectByName('hangar-door-'+i);if(door)door.position.x=(i===0?-1:1)*world.hangarOpen*48;}
     this.carrier.updateMatrixWorld(true);
@@ -202,6 +209,7 @@ export class FlightScene {
   }
 
   reset() {
+    this.capitalEffects.reset();
     this.exhaust.reset();
     for (const group of this.ships.values()) { this.scene.remove(group); disposeModel(group); }
     this.ships.clear();
@@ -222,15 +230,19 @@ export class FlightScene {
     this.flashGeometry.dispose();
     for (const mesh of this.flashPool) (mesh.material as THREE.Material).dispose();
     this.flashPool.length = 0;
+    this.capitalEffects.dispose();
     this.republicBolts.dispose(); this.enemyBolts.dispose(); this.turretBases.dispose();
     geometry.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); this.renderer.dispose();
   }
 
   diagnostics() {
-    return { exhaust: this.exhaust.intensity, camera: this.camera.position.toArray(), up: this.camera.up.toArray(), pixelRatio: this.renderer.getPixelRatio(), geometries: this.renderer.info.memory.geometries, drawCalls: this.renderer.info.render.calls, activeEffects: this.flashes.length, pooledEffects: this.flashPool.length };
+    return { capitalEffects:this.capitalEffects.diagnostics(), exhaust: this.exhaust.intensity, camera: this.camera.position.toArray(), up: this.camera.up.toArray(), pixelRatio: this.renderer.getPixelRatio(), geometries: this.renderer.info.memory.geometries, drawCalls: this.renderer.info.render.calls, activeEffects: this.flashes.length, pooledEffects: this.flashPool.length };
   }
 }
 
 export function fighterLabel(f: Fighter) {
-  return f.id.startsWith('enemy-gun-')?`敌舰炮塔 ${f.id.split('-').at(-1)}`:f.id.startsWith('shield-generator')?'敌舰 '+(f.id.endsWith('-2')?'2':'1')+' 护盾发生器':f.id.startsWith('frigate-bridge')?'敌舰 '+(f.id.endsWith('-2')?'2':'1')+' 舰桥':f.model==='ywing'?`金色 ${f.id.split('-')[1]}`:f.id === 'player' ? '绝地座机' : f.team === 'republic' ? `苍鹭 ${f.id.split('-')[1]}号` : `秃鹫 ${f.id.split('-').at(-1)}`;
+  if(isEnemyGun(f)) return CAPITAL_ROLES[f.shipIndex as 0 | 1].name+' '+(f.heavy?'重型主炮':'近防炮')+' '+f.id.split('-').at(-1);
+  if(f.id.startsWith('shield-generator')) return CAPITAL_ROLES[f.id.endsWith('-2')?1:0].name+' 护盾发生器';
+  if(f.id.startsWith('frigate-bridge')) return CAPITAL_ROLES[f.id.endsWith('-2')?1:0].name+' 舰桥';
+  return f.model==='ywing'?`金色 ${f.id.split('-')[1]}`:f.id === 'player' ? '绝地座机' : f.team === 'republic' ? `苍鹭 ${f.id.split('-')[1]}号` : `秃鹫 ${f.id.split('-').at(-1)}`;
 }

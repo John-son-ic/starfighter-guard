@@ -1,4 +1,4 @@
-import { FlightWorld, NEUTRAL_INPUT, TORPEDO_CONFIG } from './world.ts';
+import { FlightWorld, NEUTRAL_INPUT, TORPEDO_CONFIG, CAPITAL_ROLES } from './world.ts';
 import { FlightScene } from './scene.ts';
 import { FlightAudio } from './audio.ts';
 import { TacticalHUD } from './hud.ts';
@@ -17,11 +17,11 @@ export function startFlight(app: HTMLElement) {
     <header class="flight-header"><a href="./?mode=models" class="flight-logo">✦ <span>STARFIGHTER GUARD</span></a><div class="mission-status"><i></i><span id="phase-label">编队集结</span><small id="wave-label">余烬航道 / 19 BBY</small></div><button id="pause-button">暂停 <kbd>Esc</kbd></button></header>
     <aside class="wing-panel"><span class="hud-eyebrow">苍鹭中队</span><div id="wing-status"></div><div id="bomber-status"></div><div class="wing-order"><kbd>1</kbd> 集火　<kbd>2</kbd> 归队</div></aside>
     <aside class="carrier-panel"><div><span>守望号</span><strong id="carrier-value">100%</strong></div><div class="hud-bar"><i id="carrier-bar"></i></div><small>狩猎者级 / 保卫受损区域</small></aside>
-    <div class="target-layer"></div><div class="reticle"><i></i><b></b></div><div class="steering-cursor"></div><div class="lead-marker"></div><div class="hit-confirm">×</div>
-    <div class="torpedo-hud" data-state="idle"><svg class="torpedo-ring" viewBox="0 0 100 100" aria-hidden="true"><circle class="torpedo-track" cx="50" cy="50" r="46"/><circle id="torpedo-progress" cx="50" cy="50" r="46" pathLength="100"/></svg><div class="torpedo-card"><span class="torpedo-label">质子鱼雷</span><strong id="torpedo-status"></strong><small id="torpedo-hint"></small><small id="torpedo-ammo"></small></div></div><div class="target-readout"><span id="target-name">暂无目标</span><strong id="target-distance">—</strong><small>Tab 选择视野中心目标</small></div>
+    <aside class="threat-panel" hidden><span>战术警报</span><div id="threat-lines" role="status" aria-live="polite"></div><button id="threat-select">3 · 标记威胁</button></aside><div class="target-layer"></div><div class="reticle"><i></i><b></b></div><div class="steering-cursor"></div><div class="lead-marker"></div><div class="hit-confirm">×</div>
+    <div class="torpedo-hud" data-state="idle"><svg class="torpedo-ring" viewBox="0 0 100 100" aria-hidden="true"><circle class="torpedo-track" cx="50" cy="50" r="46"/><circle id="torpedo-progress" cx="50" cy="50" r="46" pathLength="100"/></svg><div class="torpedo-card"><span class="torpedo-label">质子鱼雷</span><strong id="torpedo-status"></strong><small id="torpedo-hint"></small><small id="torpedo-ammo"></small></div></div><div class="target-readout"><span id="target-name">暂无目标</span><strong id="target-distance">—</strong><small>Tab 选择视野中心目标</small><em class="target-purpose"></em></div>
     <div class="flight-message" role="status" aria-live="polite"></div>
     <footer class="telemetry"><div class="speed-cell"><small>航速</small><strong id="speed-value">115<em> m/s</em></strong><span>W / S 调节推力</span><span id="jump-status"></span><span id="shield-status"></span></div><div class="meters"><label>机体 <b id="hull-value">100%</b></label><div class="hud-bar"><i id="hull-bar"></i></div><label>武器热量 <b id="heat-value">0%</b></label><div class="hud-bar heat"><i id="heat-bar"></i></div><label>加速能量 <b id="boost-value">100%</b></label><div class="hud-bar boost"><i id="boost-bar"></i></div></div><div class="flight-stats"><strong id="kills-value">00 <small>/ 46</small></strong><span>敌机击毁</span><small>Q / E 滚转 · Shift 加速 · 左键开火 · R 鱼雷</small></div></footer>
-    <div class="flight-overlay"><div class="brief-card"><span class="brief-eyebrow">克隆人战争 / 原创护舰任务</span><h1>余烬航道</h1><p id="brief-copy">守望号的局部护盾已经失效。带领四架 ARC-170，与守望号的自动炮塔协同作战，清除三波敌机后，击破两艘慷慨级各自的护盾；每次放出1架Y翼和2架护航机，摧毁两艘敌舰。</p><div class="brief-controls"><span><b>鼠标</b> 转向</span><span><b>左键</b> 激光炮</span><span><b>W / S</b> 油门</span><span><b>A / D</b> 左右转向</span><span><b>Q / E</b> 滚转</span><span><b>Shift</b> 加速</span><span><b>Tab</b> 选择目标</span><span><b>空格</b> 短程跃迁</span><span><b>F</b> 主动护盾</span><span><b>R</b> 锁定后发射鱼雷</span></div><div class="settings-row"><label>音量<input id="volume" type="range" min="0" max="1" step="0.05"></label><label>灵敏度<input id="sensitivity" type="range" min="0.2" max="3" step="0.1"></label><label>画质<select id="quality"><option value="medium">标准</option><option value="low">低</option></select></label></div><button id="launch-button">进入战场 <span>↗</span></button><button id="restart-button" hidden>重新开始</button><a href="./?mode=models">查看舰船模型 ↗</a><small class="prototype-note">首版飞行原型 · 桌面鼠标键盘</small></div></div>
+    <div class="flight-overlay"><div class="brief-card"><span class="brief-eyebrow">克隆人战争 / 原创护舰任务</span><h1>余烬航道</h1><p id="brief-copy">守望号的局部护盾已经失效。带领四架 ARC-170，与守望号的自动炮塔协同作战，清除三波敌机后，击破两艘慷慨级各自的护盾；每次放出1架Y翼和2架护航机，摧毁两艘敌舰。</p><div class="brief-controls"><span><b>鼠标</b> 转向</span><span><b>左键</b> 激光炮</span><span><b>W / S</b> 油门</span><span><b>A / D</b> 左右转向</span><span><b>Q / E</b> 滚转</span><span><b>Shift</b> 加速</span><span><b>Tab</b> 选择目标</span><span><b>空格</b> 短程跃迁</span><span><b>F</b> 主动护盾</span><span><b>3</b> 标记威胁</span><span><b>R</b> 锁定后发射鱼雷</span></div><div class="settings-row"><label>音量<input id="volume" type="range" min="0" max="1" step="0.05"></label><label>灵敏度<input id="sensitivity" type="range" min="0.2" max="3" step="0.1"></label><label>画质<select id="quality"><option value="medium">标准</option><option value="low">低</option></select></label></div><button id="launch-button">进入战场 <span>↗</span></button><button id="restart-button" hidden>重新开始</button><a href="./?mode=models">查看舰船模型 ↗</a><small class="prototype-note">首版飞行原型 · 桌面鼠标键盘</small></div></div>
   </section>`;
   const elements = new Map<string, HTMLElement>();
   const get = <T extends HTMLElement>(selector: string): T => {
@@ -106,9 +106,13 @@ export function startFlight(app: HTMLElement) {
     put('#boost-value', `${Math.round(world.boostEnergy)}%`); bar('#boost-bar', world.boostEnergy);
     get('.heat').classList.toggle('overheated', world.player.weapon.overheated);
     put('#phase-label', world.stage!=='defense'?world.objectiveText:world.mission.phase === 'intermission' ? `下一波 ${Math.max(0, Math.ceil(MISSION_CONFIG.intermissionSeconds - world.mission.phaseSeconds))} 秒` : world.mission.phase === 'briefing' ? '编队集结' : `迎击敌机 · ${world.enemies.length} 架`);
-    put('#wave-label', world.stage!=='defense'?world.capitalShips.map((s,i)=>s.destroyed?('敌舰'+(i+1)+' 已毁'):('敌舰'+(i+1)+' 盾'+Math.ceil(s.generator.health/360*100)+'% / 舰桥'+Math.ceil(s.bridge.health/1800*100)+'%')).join(' · '):'WAVE '+Math.max(1, world.mission.waveIndex + 1)+' / '+MISSION_CONFIG.waves.length);
+    put('#wave-label', world.stage!=='defense'?world.capitalShips.map(s=>s.destroyed?(CAPITAL_ROLES[s.role].name+' 已毁'):(CAPITAL_ROLES[s.role].name+' 盾'+Math.ceil(s.generator.health/360*100)+'% / 舰桥'+Math.ceil(s.bridge.health/1800*100)+'%')).join(' · '):'WAVE '+Math.max(1, world.mission.waveIndex + 1)+' / '+MISSION_CONFIG.waves.length);
     if (world.mission.kills !== previousKills) { get('#kills-value').innerHTML = `${String(world.mission.kills).padStart(2, '0')} <small>/ ${world.stage==='defense'?MISSION_CONFIG.waves.reduce((sum,n)=>sum+n,0):'∞'}</small>`; previousKills = world.mission.kills; }
     put('.flight-message', world.message);
+    const threats=world.threats.slice(0,2);
+    get('.threat-panel').hidden=threats.length===0;
+    put('#threat-lines',threats.map(a=>a.text).join('\n'));
+    get<HTMLButtonElement>('#threat-select').disabled=!world.threats.some(a=>world.attackTargets.some(f=>f.id===a.targetId));
     put('#bomber-status', world.stage==='launch'||world.stage==='assault' ? '轰炸编队 / 金色中队\n'+[1,2].map(i=>{const f=world.fighters.find(f=>f.id==='gold-'+i);return '金色 '+i+'　'+(f?Math.ceil(f.health/f.maxHealth*100)+'%':world.capitalShips[i-1]!.launched===0?'待出击':'失联')}).join('\n') : '');
     get('.damage-overlay').style.opacity = String(world.hitFlash * 0.6);
     get('.hit-confirm').style.opacity = String(world.hitConfirm);
@@ -134,6 +138,7 @@ export function startFlight(app: HTMLElement) {
   [volume, sensitivity, quality].forEach(element => element.addEventListener('change', persist, options));
   get('#launch-button').addEventListener('click', () => { if (state === 'menu') restart(); else { audio.start(); overlay('playing'); } }, options);
   get('#restart-button').addEventListener('click', restart, options);
+  get('#threat-select').addEventListener('click',()=>world.selectThreat(),options);
   get('#pause-button').addEventListener('click', () => overlay(state === 'playing' ? 'paused' : 'playing'), options);
   window.addEventListener('resize', resize, options);
   window.addEventListener('blur', () => { if (state === 'playing') overlay('paused'); }, options);
@@ -144,6 +149,7 @@ export function startFlight(app: HTMLElement) {
     if (['Tab', 'Space', 'ArrowUp', 'ArrowDown'].includes(event.code)) event.preventDefault();
     if (!event.repeat) {
       if (event.code === 'Tab') world.selectNext(scene.camera);
+      if (event.code === 'Digit3') world.selectThreat();
       if (event.code === 'Digit1') { world.command('focus'); audio.cue('command'); }
       if (event.code === 'Digit2') { world.command('follow'); audio.cue('command'); }
     }
@@ -165,7 +171,7 @@ export function startFlight(app: HTMLElement) {
   const input = (): FlightInput => ({ yaw: keys.has('KeyA') || keys.has('KeyD') ? Number(keys.has('KeyD')) - Number(keys.has('KeyA')) : mouseX, pitch: mouseY, roll: Number(keys.has('KeyQ')) - Number(keys.has('KeyE')), throttle: Number(keys.has('KeyW')) - Number(keys.has('KeyS')), boost: keys.has('ShiftLeft') || keys.has('ShiftRight'), fire: firing, jump: keys.has('Space'), shield: keys.has('KeyF'), torpedo: keys.has('KeyR') });
   function step(value: FlightInput) {
     world.step(1 / 60, value); scene.consume(world.events);
-    for (const event of world.events) if (event.type === 'shot' || event.type === 'explosion' || event.type === 'player-hit' || event.type==='carrier-shot') audio.cue(event.type === 'player-hit' ? 'impact' : event.type);
+    for (const event of world.events) if (event.type === 'shot' || event.type === 'explosion' || event.type === 'player-hit' || event.type==='carrier-shot' || event.type==='warning') audio.cue(event.type === 'player-hit' ? 'impact' : event.type);
     if (world.terminal && state === 'playing') overlay('result');
   }
   function frame(now: number) {
@@ -183,7 +189,7 @@ export function startFlight(app: HTMLElement) {
       if (summary.count) performanceText.textContent = `最近帧率 ${Math.round(summary.fps)} fps · P95 ${summary.p95Ms.toFixed(1)} ms`;
       lastSummary = now;
     }
-    scene.render(world, state === 'playing' ? dt : 0, state === 'playing' ? Math.max(0, accumulator * 60) : 1);
+    scene.render(world, state === 'playing' || state === 'result' ? dt : 0, state === 'playing' ? Math.max(0, accumulator * 60) : 1);
     updateHUD(); frameId = requestAnimationFrame(frame);
   }
   resize(); overlay('menu'); scene.render(world, 0); updateHUD(); frameId = requestAnimationFrame(frame);

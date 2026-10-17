@@ -1,6 +1,7 @@
 import type { FlightWorld } from './world.ts';
 import type { FlightScene } from './scene.ts';
 import { fighterLabel } from './scene.ts';
+import { isEnemyGun } from './world.ts';
 
 interface Marker {
   root: HTMLDivElement;
@@ -107,9 +108,11 @@ export class TacticalHUD {
       if (!marker) { marker = this.createMarker(fighterLabel(fighter), fighter.id); this.markers.set(fighter.id, marker); }
       const point = scene.project(fighter.position);
       const hostile = fighter.team === 'separatist'; const selected = fighter.id === world.targetId;
-      const className = `ship-marker ${hostile ? 'hostile' : 'friendly'} ${selected ? 'locked' : ''} ${selected && this.occluded ? 'blocked' : ''} ${point.visible ? '' : 'offscreen'}`;
+      const threatened = world.threats.some(a=>a.subjectId===fighter.id);
+      const kind = isEnemyGun(fighter)?(fighter.heavy?'heavy-target':'defense-target'):'';
+      const className = `ship-marker ${hostile ? 'hostile' : 'friendly'} ${kind} ${threatened?'threatened':''} ${selected ? 'locked' : ''} ${selected && this.occluded ? 'blocked' : ''} ${point.visible ? '' : 'offscreen'}`;
       if (marker.root.className !== className) marker.root.className = className;
-      marker.root.hidden = !hostile && !point.visible;
+      marker.root.hidden = !hostile && !point.visible && !threatened;
       this.position(marker, point);
       const distance = fighter.position.distanceTo(world.player.position);
       text(marker.distance, ` ${Math.round(distance / (selected ? 1 : 10)) * (selected ? 1 : 10)} m`);
@@ -119,6 +122,9 @@ export class TacticalHUD {
     this.home.root.className = `ship-marker home-marker ${homePoint.visible ? '' : 'offscreen'}`;
     text(this.home.distance, ` ${Math.round(world.player.position.distanceTo(world.carrier.position))} m`);
     this.position(this.home, homePoint);
+    this.home.root.classList.toggle('threatened',world.threats.some(a=>a.subjectId==='home'));
+    const purpose=this.readout.querySelector('.target-purpose');
+    if(purpose) text(purpose,target?(isEnemyGun(target)?target.heavy?'拆除主炮 · 减轻母舰压力':'拆除近防 · 保护Y翼与座机':target.id.startsWith('shield-generator')?'破盾后派出 1 Y翼 + 2 护航机':target.id.startsWith('frigate-bridge')?'护航Y翼 · 重型鱼雷对舰伤害更高':''): '');
   }
 
   reset() {
