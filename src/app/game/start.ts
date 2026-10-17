@@ -15,13 +15,13 @@ export function startFlight(app: HTMLElement) {
   app.innerHTML = `<section class="flight-shell">
     <div class="flight-viewport"></div><div class="jump-effect"></div><div class="flight-vignette"></div><div class="damage-overlay"></div>
     <header class="flight-header"><a href="./?mode=models" class="flight-logo">✦ <span>STARFIGHTER GUARD</span></a><div class="mission-status"><i></i><span id="phase-label">编队集结</span><small id="wave-label">余烬航道 / 19 BBY</small></div><button id="pause-button">暂停 <kbd>Esc</kbd></button></header>
-    <aside class="wing-panel"><span class="hud-eyebrow">苍鹭中队</span><div id="wing-status"></div><div id="bomber-status"></div><div class="wing-order"><kbd>1</kbd> 集火　<kbd>2</kbd> 归队</div></aside>
+    <aside class="wing-panel"><span class="hud-eyebrow">苍鹭中队</span><div id="wing-status"></div><div id="bomber-status"></div><small id="checkpoint-status"></small><div class="wing-order"><kbd>1</kbd> 集火　<kbd>2</kbd> 归队</div></aside>
     <aside class="carrier-panel"><div><span>守望号</span><strong id="carrier-value">100%</strong></div><div class="hud-bar"><i id="carrier-bar"></i></div><small>狩猎者级 / 保卫受损区域</small></aside>
     <aside class="threat-panel" hidden><span>战术警报</span><div id="threat-lines" role="status" aria-live="polite"></div><button id="threat-select">3 · 标记威胁</button></aside><div class="target-layer"></div><div class="reticle"><i></i><b></b></div><div class="steering-cursor"></div><div class="lead-marker"></div><div class="hit-confirm">×</div>
     <div class="torpedo-hud" data-state="idle"><svg class="torpedo-ring" viewBox="0 0 100 100" aria-hidden="true"><circle class="torpedo-track" cx="50" cy="50" r="46"/><circle id="torpedo-progress" cx="50" cy="50" r="46" pathLength="100"/></svg><div class="torpedo-card"><span class="torpedo-label">质子鱼雷</span><strong id="torpedo-status"></strong><small id="torpedo-hint"></small><small id="torpedo-ammo"></small></div></div><div class="target-readout"><span id="target-name">暂无目标</span><strong id="target-distance">—</strong><small>Tab 选择视野中心目标</small><em class="target-purpose"></em></div>
     <div class="flight-message" role="status" aria-live="polite"></div>
     <footer class="telemetry"><div class="speed-cell"><small>航速</small><strong id="speed-value">115<em> m/s</em></strong><span>W / S 调节推力</span><span id="jump-status"></span><span id="shield-status"></span></div><div class="meters"><label>机体 <b id="hull-value">100%</b></label><div class="hud-bar"><i id="hull-bar"></i></div><label>武器热量 <b id="heat-value">0%</b></label><div class="hud-bar heat"><i id="heat-bar"></i></div><label>加速能量 <b id="boost-value">100%</b></label><div class="hud-bar boost"><i id="boost-bar"></i></div></div><div class="flight-stats"><strong id="kills-value">00 <small>/ 46</small></strong><span>敌机击毁</span><small>Q / E 滚转 · Shift 加速 · 左键开火 · R 鱼雷</small></div></footer>
-    <div class="flight-overlay"><div class="brief-card"><span class="brief-eyebrow">克隆人战争 / 原创护舰任务</span><h1>余烬航道</h1><p id="brief-copy">守望号的局部护盾已经失效。带领四架 ARC-170，与守望号的自动炮塔协同作战，清除三波敌机后，击破两艘慷慨级各自的护盾；每次放出1架Y翼和2架护航机，摧毁两艘敌舰。</p><div class="brief-controls"><span><b>鼠标</b> 转向</span><span><b>左键</b> 激光炮</span><span><b>W / S</b> 油门</span><span><b>A / D</b> 左右转向</span><span><b>Q / E</b> 滚转</span><span><b>Shift</b> 加速</span><span><b>Tab</b> 选择目标</span><span><b>空格</b> 短程跃迁</span><span><b>F</b> 主动护盾</span><span><b>3</b> 标记威胁</span><span><b>R</b> 锁定后发射鱼雷</span></div><div class="settings-row"><label>音量<input id="volume" type="range" min="0" max="1" step="0.05"></label><label>灵敏度<input id="sensitivity" type="range" min="0.2" max="3" step="0.1"></label><label>画质<select id="quality"><option value="medium">标准</option><option value="low">低</option></select></label></div><button id="launch-button">进入战场 <span>↗</span></button><button id="restart-button" hidden>重新开始</button><a href="./?mode=models">查看舰船模型 ↗</a><small class="prototype-note">首版飞行原型 · 桌面鼠标键盘</small></div></div>
+    <div class="flight-overlay"><div class="brief-card"><span class="brief-eyebrow">克隆人战争 / 原创护舰任务</span><h1>余烬航道</h1><p id="brief-copy">守望号的局部护盾已经失效。带领四架 ARC-170，与守望号的自动炮塔协同作战，清除三波敌机后，击破两艘慷慨级各自的护盾；每次放出1架Y翼和2架护航机，摧毁两艘敌舰。</p><div class="brief-controls"><span><b>鼠标</b> 转向</span><span><b>左键</b> 激光炮</span><span><b>W / S</b> 油门</span><span><b>A / D</b> 左右转向</span><span><b>Q / E</b> 滚转</span><span><b>Shift</b> 加速</span><span><b>Tab</b> 选择目标</span><span><b>空格</b> 短程跃迁</span><span><b>F</b> 主动护盾</span><span><b>3</b> 标记威胁</span><span><b>R</b> 锁定后发射鱼雷</span></div><div class="settings-row"><label>音量<input id="volume" type="range" min="0" max="1" step="0.05"></label><label>灵敏度<input id="sensitivity" type="range" min="0.2" max="3" step="0.1"></label><label>画质<select id="quality"><option value="medium">标准</option><option value="low">低</option></select></label></div><button id="launch-button">进入战场 <span>↗</span></button><button id="checkpoint-button" hidden>从敌舰来袭重试 ↗</button><small id="checkpoint-note" hidden></small><button id="restart-button" hidden>重新开始</button><a href="./?mode=models">查看舰船模型 ↗</a><small class="prototype-note">首版飞行原型 · 桌面鼠标键盘</small></div></div>
   </section>`;
   const elements = new Map<string, HTMLElement>();
   const get = <T extends HTMLElement>(selector: string): T => {
@@ -58,8 +58,14 @@ export function startFlight(app: HTMLElement) {
     document.documentElement.dataset.flightState = next;
     get('.flight-overlay').hidden = next === 'playing';
     get('#restart-button').hidden = next !== 'paused' && next !== 'result';
+    const canRetry=next==='result'&&world.mission.phase==='lost'&&world.hasCheckpoint;
+    get('#checkpoint-button').hidden=get('#checkpoint-note').hidden=!canRetry;
+    get('#restart-button').textContent=canRetry?'从头开始':'重新开始';
+    const checkpoint=world.checkpointInfo;
+    if(canRetry&&checkpoint)get('#checkpoint-note').textContent='保留检查点战况：座机 '+Math.ceil(checkpoint.playerHealth)+'% · 母舰 '+Math.ceil(checkpoint.carrierHealth/MVP_CONFIG.carrierHealth*100)+'% · 僚机 '+checkpoint.friendlies+' 架。本次任务内有效。';
     get('#pause-button').hidden = next === 'menu' || next === 'result';
     get('#launch-button').hidden = next === 'result';
+    get('.brief-controls').hidden = next === 'result';
     if (next === 'paused') { get('h1').textContent = '任务暂停'; get('#brief-copy').textContent = '战场已暂停。调整设置后继续；窗口失去焦点时也会自动暂停。'; get('#launch-button').textContent = '继续飞行 ↗'; }
     if (next === 'result') {
       get('h1').textContent = world.mission.phase === 'won' ? '敌舰已摧毁' : '任务失败';
@@ -70,6 +76,12 @@ export function startFlight(app: HTMLElement) {
     scene.reset(); world = new FlightWorld(scene.carrier,scene.frigate,scene.secondFrigate);
     tactical.reset();
     audio.start(); overlay('playing'); scene.render(world, 0); updateHUD();
+  }
+  function retryCheckpoint() {
+    const restored=world.retryFromCheckpoint();
+    if(!restored)return;
+    scene.reset();tactical.reset();world=restored;
+    audio.start();overlay('playing');scene.render(world,0);updateHUD();
   }
   function updateHUD() {
     const put = (selector: string, value: string) => { const element = get(selector); if (element.textContent !== value) element.textContent = value; };
@@ -103,6 +115,7 @@ export function startFlight(app: HTMLElement) {
     put('#torpedo-ammo', world.torpedoCooldowns.map((t,i)=>(i+1)+'号 '+(t>0?Math.ceil(t)+'秒':'就绪')).join('　 · 　'));
     get('#torpedo-progress').style.strokeDashoffset = String(100 - progress);
     put('#heat-value', world.player.weapon.overheated ? '过热' : `${Math.round(world.player.weapon.heat)}%`); bar('#heat-bar', world.player.weapon.heat);
+    put('#checkpoint-status',world.hasCheckpoint?'✓ 敌舰来袭检查点已记录':'');
     put('#boost-value', `${Math.round(world.boostEnergy)}%`); bar('#boost-bar', world.boostEnergy);
     get('.heat').classList.toggle('overheated', world.player.weapon.overheated);
     put('#phase-label', world.stage!=='defense'?world.objectiveText:world.mission.phase === 'intermission' ? `下一波 ${Math.max(0, Math.ceil(MISSION_CONFIG.intermissionSeconds - world.mission.phaseSeconds))} 秒` : world.mission.phase === 'briefing' ? '编队集结' : `迎击敌机 · ${world.enemies.length} 架`);
@@ -138,6 +151,7 @@ export function startFlight(app: HTMLElement) {
   [volume, sensitivity, quality].forEach(element => element.addEventListener('change', persist, options));
   get('#launch-button').addEventListener('click', () => { if (state === 'menu') restart(); else { audio.start(); overlay('playing'); } }, options);
   get('#restart-button').addEventListener('click', restart, options);
+  get('#checkpoint-button').addEventListener('click',retryCheckpoint,options);
   get('#threat-select').addEventListener('click',()=>world.selectThreat(),options);
   get('#pause-button').addEventListener('click', () => overlay(state === 'playing' ? 'paused' : 'playing'), options);
   window.addEventListener('resize', resize, options);
@@ -171,7 +185,7 @@ export function startFlight(app: HTMLElement) {
   const input = (): FlightInput => ({ yaw: keys.has('KeyA') || keys.has('KeyD') ? Number(keys.has('KeyD')) - Number(keys.has('KeyA')) : mouseX, pitch: mouseY, roll: Number(keys.has('KeyQ')) - Number(keys.has('KeyE')), throttle: Number(keys.has('KeyW')) - Number(keys.has('KeyS')), boost: keys.has('ShiftLeft') || keys.has('ShiftRight'), fire: firing, jump: keys.has('Space'), shield: keys.has('KeyF'), torpedo: keys.has('KeyR') });
   function step(value: FlightInput) {
     world.step(1 / 60, value); scene.consume(world.events);
-    for (const event of world.events) if (event.type === 'shot' || event.type === 'explosion' || event.type === 'player-hit' || event.type==='carrier-shot' || event.type==='warning') audio.cue(event.type === 'player-hit' ? 'impact' : event.type);
+    for(const event of world.events)if(event.type!=='impact')audio.cue(event.type==='player-hit'?'impact':event.type);
     if (world.terminal && state === 'playing') overlay('result');
   }
   function frame(now: number) {
@@ -201,6 +215,7 @@ export function startFlight(app: HTMLElement) {
       snapshot() { return { stage:world.stage, generator:world.generator.health, bridge:world.bridge.health, hangar:world.hangarOpen, bombers:world.bombers.length, phase: world.mission.phase, kills: world.mission.kills, active: world.enemies.length, state, player: world.player.position.toArray(), health: world.player.health, carrier: world.carrierHealth, heat: world.player.weapon.heat }; },
       performance() { return frameStats.summary(); },
       diagnostics() { return scene.diagnostics(); },
+      render(dt = 0) { scene.render(world,Math.max(0,Math.min(.1,dt)));updateHUD(); },
       input,
       refresh() { tactical.reset(); scene.reset(); scene.render(world, 0); updateHUD(); },
     } });

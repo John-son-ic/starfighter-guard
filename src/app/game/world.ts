@@ -27,7 +27,19 @@ export function isEnemyGun(f: Fighter): f is EnemyGun { return 'heavy' in f; }
 export interface TacticalAlert { id: string; text: string; subjectId: string; position: THREE.Vector3; targetId: string | null; expires: number; }
 export interface Bolt { capital?: boolean; targetId?: string; id: number; team: Fighter['team']; owner: string; position: THREE.Vector3; previous: THREE.Vector3; velocity: THREE.Vector3; life: number; damage: number }
 export interface CarrierTurret { id: string; position: THREE.Vector3; direction: THREE.Vector3; cooldown: number; flash: number; targetId: string | null; aim: THREE.Vector3 | null; scanAt: number }
-export type WorldEvent = { type: 'explosion' | 'impact' | 'player-hit' | 'shot' | 'carrier-shot' | 'warning'; position: THREE.Vector3; enemy: boolean; size?: number };
+export type WorldEvent = { type: 'explosion' | 'impact' | 'player-hit' | 'shot' | 'carrier-shot' | 'warning' | 'torpedo-launch' | 'torpedo-hit' | 'kill' | 'shield-hit' | 'shield-bounce'; position: THREE.Vector3; enemy: boolean; size?: number; normal?: THREE.Vector3 };
+interface AssaultCheckpoint {
+  fighters: Fighter[]; mission: MissionState; turrets: CarrierTurret[];
+  time: number; carrierHealth: number; turretShots: number; boltSequence: number;
+  boostEnergy: number; jumpCooldown: number; shieldTime: number; shieldCooldown: number;
+  torpedoCooldowns: number[]; wingOrder: 'guard' | 'focus' | 'follow'; focusId: string | null;
+}
+function copyFighter(f: Fighter): Fighter {
+  return {...f,position:f.position.clone(),previous:f.position.clone(),rotation:f.rotation.clone(),weapon:{...f.weapon}};
+}
+function copyTurret(t: CarrierTurret): CarrierTurret {
+  return {...t,position:t.position.clone(),direction:t.direction.clone(),aim:t.aim?.clone()??null};
+}
 const FORWARD = new THREE.Vector3(0, 0, -1);
 const Y = new THREE.Vector3(0, 1, 0);
 const X = new THREE.Vector3(1, 0, 0);
@@ -64,6 +76,37 @@ export class FlightWorld {
   readonly enemyGuns: EnemyGun[] = [];
   private alerts: TacticalAlert[] = [];
   private nextWarningSound = 0;
+  private checkpoint: AssaultCheckpoint | null = null;
+  get hasCheckpoint() { return this.checkpoint !== null; }
+  get checkpointInfo() {
+    const c=this.checkpoint;
+    return c?{carrierHealth:c.carrierHealth,playerHealth:c.fighters[0]!.health,friendlies:c.fighters.length-1}:null;
+  }
+
+  /** One session-only snapshot, captured once after the last defense wave. */
+  private saveAssaultCheckpoint() {
+    this.bolts.length=0; // The completed wave leaves no stray rounds in the new stage.
+    this.torpedoLock=0;this.torpedoTarget=null;this.targetId=null;
+    this.checkpoint={fighters:this.fighters.filter(f=>f.team==='republic'&&f.health>0).map(copyFighter),mission:structuredClone(this.mission),
+      turrets:this.turrets.map(copyTurret),time:this.time,carrierHealth:this.carrierHealth,turretShots:this.turretShots,boltSequence:this.boltSequence,
+      boostEnergy:this.boostEnergy,jumpCooldown:this.jumpCooldown,shieldTime:this.shieldTime,shieldCooldown:this.shieldCooldown,
+      torpedoCooldowns:[...this.torpedoCooldowns],wingOrder:this.wingOrder,focusId:this.focusId};
+  }
+
+  retryFromCheckpoint(): FlightWorld | null {
+    const c=this.checkpoint;
+    if(!c||this.mission.phase!=='lost')return null;
+    const restored=new FlightWorld(this.carrier,...this.capitalShips.map(s=>s.model) as [THREE.Group,THREE.Group]);
+    Object.assign(restored.player,copyFighter(c.fighters[0]!));
+    restored.fighters.splice(0,restored.fighters.length,restored.player,...c.fighters.slice(1).map(copyFighter));
+    restored.mission=structuredClone(c.mission);restored.stage='arrival';restored.stageTime=0;
+    restored.turrets.splice(0,restored.turrets.length,...c.turrets.map(copyTurret));
+    restored.time=c.time;restored.carrierHealth=c.carrierHealth;restored.turretShots=c.turretShots;restored.boltSequence=c.boltSequence;
+    restored.boostEnergy=c.boostEnergy;restored.jumpCooldown=c.jumpCooldown;restored.shieldTime=c.shieldTime;restored.shieldCooldown=c.shieldCooldown;
+    restored.torpedoCooldowns.splice(0,2,...c.torpedoCooldowns);restored.wingOrder=c.wingOrder;restored.focusId=c.focusId;
+    restored.checkpoint=c;restored.message='已返回敌舰来袭检查点 · 当时的损伤与僚机状态已保留。';
+    return restored;
+  }
   get threats() { return this.terminal ? [] : this.alerts.filter(a => a.expires > this.time).sort((a,b) => Number(b.id.startsWith('gold-')) - Number(a.id.startsWith('gold-'))); }
 
   private warn(id: string, text: string, subjectId: string, position: THREE.Vector3, owner: string) {
@@ -257,7 +300,8 @@ export class FlightWorld {
     this.mission = result.state;
     if(this.mission.phase==='won') {
       this.stage='arrival';this.stageTime=0;this.mission={...this.mission,phase:'combat'};
-      this.message='大型跃迁信号！前方5000米出现敌舰。';
+      this.saveAssaultCheckpoint();
+      this.message='检查点已记录 · 大型跃迁信号！前方5000米出现敌舰。';
     }
     for (const event of result.events) {
       if (event.type === 'spawn-wave') {
@@ -394,7 +438,7 @@ export class FlightWorld {
       this.playerCollisionVersion++; this.collisionNormal.copy(normal);
       if (this.playerShieldActive) {
         this.message = '护盾缓冲撞击，座机已弹开。';
-        this.events.push({type:'impact',position:hit.point.clone(),enemy:false});
+        this.events.push({type:'shield-bounce',position:hit.point.clone(),normal:normal.clone().negate(),enemy:false});
         return;
       }
       f.health = 0;
@@ -622,7 +666,7 @@ export class FlightWorld {
       this.bolts.push({ id: ++this.boltSequence, owner: 'player', team: 'republic', targetId: target.id,
         position, previous: position.clone(), velocity: this.forward(this.player).multiplyScalar(TORPEDO_CONFIG.speed), life: TORPEDO_CONFIG.lifetime, damage: TORPEDO_CONFIG.damage });
       this.torpedoCooldowns[this.torpedoCooldowns.findIndex(t => t === 0)] = TORPEDO_CONFIG.cooldown; this.torpedoLock = 0; this.torpedoTarget = null;
-      this.events.push({ type: 'carrier-shot', position: position.clone(), enemy: false });
+      this.events.push({ type: 'torpedo-launch', position: position.clone(), enemy: false });
       this.message = '质子鱼雷已发射！';
     }
     this.torpedoHeld = pressed;
@@ -667,10 +711,16 @@ export class FlightWorld {
         bolt.life = 0;
       } else if (victim) {
         if (victim.id === 'player' && this.playerShieldActive && bolt.team === 'separatist' && !bolt.targetId) {
-          this.events.push({type:'impact',position:bolt.previous.clone().lerp(bolt.position,firstT),enemy:false});
+          const point=bolt.previous.clone().lerp(bolt.position,firstT);
+          const normal=point.clone().sub(victim.previous.clone().lerp(victim.position,firstT)).normalize();
+          this.events.push({type:'shield-hit',position:point,normal,enemy:false});
           this.bolts.splice(i,1); continue;
         }
         victim.health = applyDamage(victim.health, bolt.damage); bolt.life = 0;
+        if(bolt.owner==='player') {
+          if(bolt.targetId)this.events.push({type:'torpedo-hit',position:victim.position.clone(),enemy:true});
+          if(victim.health===0)this.events.push({type:'kill',position:victim.position.clone(),enemy:true});
+        }
         if(victim.model==='ywing')this.warn(victim.id,'金色 '+victim.id.split('-')[1]+(victim.health>0?' 遭到攻击 · 拦截来袭敌机':' 已损失'),victim.id,victim.position,bolt.owner);
         if(victim.id.startsWith('enemy-gun-')&&victim.health===0)this.events.push({type:'explosion',position:victim.position.clone(),enemy:true,size:35});
         this.events.push({ type: bolt.targetId ? 'explosion' : 'impact', position: bolt.previous.clone().lerp(bolt.position, firstT), enemy: victim.team === 'separatist' });

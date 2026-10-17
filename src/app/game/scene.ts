@@ -37,9 +37,12 @@ export class FlightScene {
   private flashPool: THREE.Mesh[] = [];
   private flashGeometry = new THREE.IcosahedronGeometry(1, 1);
   private dummy = new THREE.Object3D();
-  private playerShield = new THREE.Mesh(new THREE.SphereGeometry(1,24,16),new THREE.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{time:{value:0}},
-    vertexShader:'varying vec3 n;varying vec3 v;void main(){vec4 mv=modelViewMatrix*vec4(position,1.);n=normalize(normalMatrix*normal);v=normalize(-mv.xyz);gl_Position=projectionMatrix*mv;}',
-    fragmentShader:'uniform float time;varying vec3 n;varying vec3 v;void main(){float rim=pow(1.-abs(dot(normalize(n),normalize(v))),2.);gl_FragColor=vec4(.25,.8,1.,.015+rim*(.32+.04*sin(time*8.)));}'}));
+  private shieldPulse=0;
+  private shieldHitDirection=new THREE.Vector3(0,0,1);
+  private bounceTime=0;
+  private playerShield = new THREE.Mesh(new THREE.SphereGeometry(1,32,24),new THREE.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{time:{value:0},hit:{value:0},hitDirection:{value:new THREE.Vector3(0,0,1)}},
+    vertexShader:'varying vec3 n;varying vec3 v;varying vec3 p;void main(){vec4 mv=modelViewMatrix*vec4(position,1.);n=normalize(normalMatrix*normal);v=normalize(-mv.xyz);p=position;gl_Position=projectionMatrix*mv;}',
+    fragmentShader:'uniform float time;uniform float hit;uniform vec3 hitDirection;varying vec3 n;varying vec3 v;varying vec3 p;void main(){float rim=pow(1.-abs(dot(normalize(n),normalize(v))),2.);float d=distance(normalize(p),normalize(hitDirection));float ring=(1.-smoothstep(.04,.16,abs(d-(1.-hit)*2.)))*hit;float glow=pow(max(0.,dot(normalize(p),normalize(hitDirection))),12.)*hit;gl_FragColor=vec4(mix(vec3(.25,.8,1.),vec3(.8,1.,1.),ring),.015+rim*(.32+.04*sin(time*8.))+ring*.85+glow*.25);}'}));
   private ready = false;
   private exhaust = new PlayerExhaust();
   private capitalEffects = new CapitalDamageEffects();
@@ -104,6 +107,12 @@ export class FlightScene {
 
   consume(events: readonly WorldEvent[]) {
     for (const event of events) {
+      if(event.type==='shield-hit'||event.type==='shield-bounce') {
+        this.shieldPulse=1;
+        this.shieldHitDirection.copy(event.normal??new THREE.Vector3(0,0,1));
+        if(event.type==='shield-bounce')this.bounceTime=.28;
+        continue;
+      }
       if (event.type !== 'impact' && event.type !== 'explosion') continue;
       if (this.flashes.length >= 40) break;
       const duration = event.type === 'explosion' ? 0.8 : 0.2;
@@ -117,6 +126,8 @@ export class FlightScene {
   }
 
   render(world: FlightWorld, dt: number, interpolation = 1) {
+    this.shieldPulse=Math.max(0,this.shieldPulse-dt*2.5);
+    this.bounceTime=Math.max(0,this.bounceTime-dt);
     this.capitalEffects.update(world,dt);
     for(const [index,ship] of world.capitalShips.entries()) {
       const model=index===0?this.frigate:this.secondFrigate;
@@ -154,6 +165,8 @@ export class FlightScene {
     if (playerModel) {this.playerShield.position.copy(playerModel.position);this.playerShield.quaternion.copy(playerModel.quaternion);}
     this.playerShield.scale.set(5.5,3.5,5.5);
     this.playerShield.material.uniforms.time!.value=world.time;
+    this.playerShield.material.uniforms.hit!.value=this.shieldPulse;
+    this.playerShield.material.uniforms.hitDirection!.value.copy(this.shieldHitDirection).applyQuaternion(this.playerShield.quaternion.clone().invert()).divide(this.playerShield.scale).normalize();
     let republic = 0; let enemy = 0;
     for (const bolt of world.bolts) {
       this.dummy.position.copy(bolt.previous).lerp(bolt.position, interpolation);
@@ -197,6 +210,11 @@ export class FlightScene {
       if (cameraHit || this.camera.position.distanceTo(p.position)<p.radius+6) this.camera.position.copy(desired);
     }
     this.camera.lookAt(p.position.clone().addScaledVector(world.forward(p), 100));
+    if(this.bounceTime>0) {
+      const strength=this.bounceTime/.28;
+      this.camera.rotateX(Math.sin((.28-this.bounceTime)*55)*.008*strength);
+      this.camera.rotateZ(Math.sin((.28-this.bounceTime)*42)*.012*strength);
+    }
     this.camera.updateMatrixWorld(); this.ready = true;
     this.renderer.render(this.scene, this.camera);
     this.renderer.domElement.dataset.ready = 'true';
@@ -209,6 +227,7 @@ export class FlightScene {
   }
 
   reset() {
+    this.shieldPulse=this.bounceTime=0;
     this.capitalEffects.reset();
     this.exhaust.reset();
     for (const group of this.ships.values()) { this.scene.remove(group); disposeModel(group); }
@@ -236,7 +255,7 @@ export class FlightScene {
   }
 
   diagnostics() {
-    return { capitalEffects:this.capitalEffects.diagnostics(), exhaust: this.exhaust.intensity, camera: this.camera.position.toArray(), up: this.camera.up.toArray(), pixelRatio: this.renderer.getPixelRatio(), geometries: this.renderer.info.memory.geometries, drawCalls: this.renderer.info.render.calls, activeEffects: this.flashes.length, pooledEffects: this.flashPool.length };
+    return { shieldPulse:this.shieldPulse,bounceTime:this.bounceTime,capitalEffects:this.capitalEffects.diagnostics(), exhaust: this.exhaust.intensity, camera: this.camera.position.toArray(), up: this.camera.up.toArray(), pixelRatio: this.renderer.getPixelRatio(), geometries: this.renderer.info.memory.geometries, drawCalls: this.renderer.info.render.calls, activeEffects: this.flashes.length, pooledEffects: this.flashPool.length };
   }
 }
 
