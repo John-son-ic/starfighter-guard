@@ -2,6 +2,8 @@
 
 先读README.md、docs/MVP.md，再读本角色入口：DSH_HANDOFF.md或CODEX_RESUME.md。用户的新指示优先。
 
+- 2026-10-18 / C33：用户要求按双人方案继续下一步，现允许独立Node/WebSocket游戏服务的本机实现/验证，默认127.0.0.1；明确覆盖下方历史“不实现游戏后端”限制。接口见docs/DUEL_SERVER.md。DSH只执行docs/tasks/DSH_DUEL_SERVER.md的D15黑盒测试，不改服务端或依赖；当前不部署、不修改防火墙、不启动公开监听。
+- 2026-10-18 / C31新增范围：用户要求设计双人对战并交接DSH。新增模式的冻结设计为docs/DUEL_MODE.md；本批DSH只执行docs/tasks/DSH_DUEL.md中D13/D14纯逻辑任务，覆盖下方历史“只以MVP为准/无后端”的设计范围限制。当前没有可玩的联机模式；服务端、飞行和前端由Codex后续阶段实现，DSH不自行扩展。未授权本轮部署或公开监听服务。
 - 首版范围只以docs/MVP.md为准；原始调研是参考，不是待实现清单。
 - Codex负责架构、接口、图形/建模、飞行手感、摄像机、HUD、集成和视觉验收。DSH负责有明确契约的纯逻辑、持久化、测试和复现。
 - DSH从DSH_HANDOFF.md的最新指示选择对应批次队列，只执行满足依赖的READY任务；完成状态先记REVIEW，不自行判定最终验收。

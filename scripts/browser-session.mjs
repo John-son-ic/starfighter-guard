@@ -23,7 +23,7 @@ export async function withBrowser(folder, run, { serverArgs = ['node_modules/vit
   });
   try {
     await waitOutput(server, readyPattern);
-    browser = spawn(process.env.CHROME_PATH ?? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', ['--headless=new', '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--disable-extensions', '--disable-component-update', '--disable-sync', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank'], { stdio: 'pipe', windowsHide: true });
+    browser = spawn(process.env.CHROME_PATH ?? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', ['--headless=new', '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--disable-extensions', '--disable-component-update', '--disable-sync', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank'], { stdio: 'pipe', windowsHide: true });
     const [, endpoint] = await waitOutput(browser, /DevTools listening on (ws:\/\/[^\s]+)/);
     socket = new WebSocket(endpoint);
     await new Promise((done, reject) => { socket.addEventListener('open', done, { once: true }); socket.addEventListener('error', reject, { once: true }); });
@@ -36,6 +36,7 @@ export async function withBrowser(folder, run, { serverArgs = ['node_modules/vit
       } else if (message.method === 'Runtime.exceptionThrown') pageErrors.push(message.params.exceptionDetails.exception?.description ?? message.params.exceptionDetails.text);
       for (const handler of handlers.get(message.method) ?? []) Promise.resolve(handler(message.params)).catch(error => pageErrors.push(String(error)));
     });
+    const createPage = async () => {
     const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
     const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true });
     await send('Runtime.enable', {}, sessionId); await send('Page.enable', {}, sessionId);
@@ -45,9 +46,12 @@ export async function withBrowser(folder, run, { serverArgs = ['node_modules/vit
       if (result.exceptionDetails) throw new Error(JSON.stringify(result.exceptionDetails)); return result.result.value;
     };
     const settle = () => evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
-    const capture = async name => { await settle(); const { data } = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }); await writeFile(join(output, name + '.png'), Buffer.from(data, 'base64')); };
+    const capture = async name => { await call('Page.bringToFront');await settle(); const { data } = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }); await writeFile(join(output, name + '.png'), Buffer.from(data, 'base64')); };
+    return {call,evaluate,capture,settle};
+    };
+    const {call,evaluate,capture,settle}=await createPage();
     const onEvent = (method, handler) => { const list = handlers.get(method) ?? []; list.push(handler); handlers.set(method, list); };
-    const result = await run({ call, evaluate, capture, settle, output, pageErrors, onEvent });
+    const result = await run({ call, evaluate, capture, settle, output, pageErrors, onEvent, createPage });
     await writeFile(join(output, 'browser-checks.json'), JSON.stringify({ ...result, browser: await send('Browser.getVersion'), renderer: 'SwiftShader software rendering; no hardware FPS claim', pageErrors }, null, 2) + '\n');
     console.log(JSON.stringify({ ...result, pageErrors }));
   } finally {

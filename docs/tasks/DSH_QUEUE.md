@@ -1,5 +1,11 @@
 # DSH执行队列
 
+2026-10-18 / C34最新：D15已接受DONE，本批结束无新READY。下方C33 READY是历史；不要重复执行D15。
+
+2026-10-18 / C33当前有效任务：[第九批D15服务端独立回归](DSH_DUEL_SERVER.md)，READY，接口已落盘并验证。下方C32“D15未解锁”为历史；以此入口和DSH_HANDOFF.md顶部为准。
+
+2026-10-18 / 最新有效队列：[第八批双人对战D13/D14](DSH_DUEL.md)，两项已由Codex C32接受为DONE；D15未解锁，目前无READY。此文件下方D01—D11及其他旧批次是历史，不重新执行；以DSH_HANDOFF.md顶部和最新任务书为准。
+
 状态约定：READY可执行；DOING进行中；REVIEW自测完成待Codex；DONE由Codex验收；BLOCKED需说明原因。D01/D02/D03独立，D04依赖前三项实现及测试通过（可处于REVIEW）。
 
 ## D01 — 任务状态机

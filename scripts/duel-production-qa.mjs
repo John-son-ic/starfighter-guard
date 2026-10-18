@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {withBrowser} from './browser-session.mjs';
+
+await withBrowser('c34-production',async({call,evaluate,capture,createPage,pageErrors})=>{
+  const a={call,evaluate,capture},b=await createPage();
+  const wait=(page,expression)=>page.evaluate(`new Promise((resolve,reject)=>{let tries=0;const timer=setInterval(()=>{if(${expression}){clearInterval(timer);resolve(true)}else if(++tries>100){clearInterval(timer);reject(new Error(document.body.innerText))}},100)})`);
+  for(const page of [a,b]){await page.call('Emulation.setDeviceMetricsOverride',{width:1280,height:800,deviceScaleFactor:1,mobile:false});await page.call('Page.navigate',{url:'http://127.0.0.1:5188/?mode=duel&qa=1'});await page.call('Page.bringToFront');await wait(page,`document.querySelector('canvas')?.dataset.ready==='true'`);assert.equal(await page.evaluate(`typeof window.__duelQA`),'undefined');}
+  await a.evaluate(`document.querySelector('#duel-create').click()`);await wait(a,`document.documentElement.dataset.duelPhase==='waiting'`);const code=await a.evaluate(`document.querySelector('#duel-room-code').textContent`);
+  await b.evaluate(`document.querySelector('#duel-code').value=${JSON.stringify(code)};document.querySelector('#duel-join-form').requestSubmit()`);await wait(b,`document.documentElement.dataset.duelPhase==='waiting'`);
+  await a.capture('01-production-room');for(const page of [a,b])await page.evaluate(`document.querySelector('#duel-ready').click()`);await wait(a,`document.documentElement.dataset.duelPhase==='playing'`);await wait(b,`document.documentElement.dataset.duelPhase==='playing'`);
+  await a.call('Page.bringToFront');await a.call('Input.dispatchMouseEvent',{type:'mouseMoved',x:640,y:400});await a.call('Input.dispatchMouseEvent',{type:'mousePressed',x:640,y:400,button:'left',clickCount:1});await a.call('Input.dispatchKeyEvent',{type:'keyDown',code:'KeyF',key:'f'});await a.call('Input.dispatchKeyEvent',{type:'keyUp',code:'KeyF',key:'f'});await a.evaluate('new Promise(r=>setTimeout(r,500))');await a.call('Input.dispatchMouseEvent',{type:'mouseReleased',x:640,y:400,button:'left',clickCount:1});
+  assert.ok(await a.evaluate(`parseFloat(document.querySelector('#duel-heat').textContent)`)>0);assert.match(await a.evaluate(`document.querySelector('#duel-shield').textContent`),/开启|冷却/);await a.capture('02-production-shield');
+  await b.evaluate(`document.querySelector('#duel-menu-button').click();document.querySelector('#duel-menu-leave').click()`);await wait(a,`document.documentElement.dataset.duelPhase==='finished'`);assert.match(await a.evaluate(`document.querySelector('#duel-result').textContent`),/对手已离开/);await a.capture('03-production-result');
+  await a.evaluate(`document.querySelector('#duel-leave').click()`);await wait(a,`document.documentElement.dataset.duelPhase==='lobby'`);
+  await a.call('Page.navigate',{url:'http://127.0.0.1:5188/'});await wait(a,`document.documentElement.dataset.flightState==='menu'`);assert.equal(await a.evaluate(`!!document.querySelector('a[href="./?mode=duel"]')`),true);assert.deepEqual(pageErrors,[]);
+  return {checks:['production two-page create/join/ready','no development QA hook even with qa=1','actual mouse fire and F shield','opponent leave and result','return lobby','singleplayer menu retains duel link'],code,localOnly:true};
+},{serverArgs:['scripts/serve-duel.mjs','--port','5188'],readyPattern:/双人界面[：:]/});

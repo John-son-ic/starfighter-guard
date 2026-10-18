@@ -7,6 +7,9 @@ try {
   if (new URLSearchParams(location.search).get('mode') === 'models') {
     const { startModelViewer } = await import('../visual/viewer.ts');
     startModelViewer(app);
+  } else if(new URLSearchParams(location.search).get('mode')==='duel') {
+    const {startDuel}=await import('./duel/start.ts');
+    await startDuel(app);
   } else {
     const { startFlight } = await import('./game/start.ts');
     startFlight(app);

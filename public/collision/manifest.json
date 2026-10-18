@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "format": "DUELCOL1",
+  "file": "venator-duel.bin",
+  "sourceFactory": "createVenatorModel(false,false)",
+  "units": "meters",
+  "vertices": 53026,
+  "triangles": 91576,
+  "bytes": 1735240,
+  "bounds": [
+    [
+      -271.6199951171875,
+      -94.25,
+      -577.5
+    ],
+    [
+      271.6199951171875,
+      94.25,
+      577.5
+    ]
+  ],
+  "sha256": "6ba33d7ae50c745ea2ef0603b2c03650bd7492f120c4bd5ea3023e23eaed17e1",
+  "sourceHashes": {
+    "src/visual/models/venator.ts": "481d68f61a234e0f984c637c78bada6588724dc71d5269166de7e0984858b203",
+    "src/visual/models/venator-detail.ts": "a982dc99b9ae26967122443014aea3655c39417ec880c7eec1cb2560993da74a",
+    "src/visual/models/venator-geometry.ts": "a877bc681dc43aad9d03ddff31fefb3bac641445969e2386250a5ee359fb0857",
+    "src/visual/models/primitives.ts": "a5c32512039c45bf74d518182a7f2c76fcfa07f3ac3deef374acb2f9f0f1ae52"
+  }
+}

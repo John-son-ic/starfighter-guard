@@ -3,9 +3,12 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=24 <25" },
+  "engines": {
+    "node": ">=24 <25"
+  },
   "scripts": {
     "dev": "vite --host 127.0.0.1",
+    "duel:serve": "node scripts/serve-duel.mjs",
     "typecheck": "tsc --noEmit",
     "models:export": "node scripts/export-models.mjs",
     "assets:verify": "node scripts/verify-assets.mjs",
@@ -14,9 +17,14 @@
     "check": "npm run typecheck && npm run assets:verify && npm run build && npm test",
     "preview": "vite preview --host 127.0.0.1"
   },
-  "dependencies": { "three": "0.186.1" },
+  "dependencies": {
+    "three": "0.186.1",
+    "ws": "8.22.0"
+  },
   "devDependencies": {
+    "@types/node": "24.19.2",
     "@types/three": "0.186.0",
+    "@types/ws": "8.18.2",
     "typescript": "7.0.2",
     "vite": "8.3.4"
   }

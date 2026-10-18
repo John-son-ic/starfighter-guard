@@ -1,5 +1,15 @@
 # Codex恢复入口
 
+验收收尾 / C34：最终npm.cmd run check退出0，357项/353通过/4文件符号链接权限跳过；最后一次生产双页面QA通过，已查看最终护盾/提前量/结算截图，dist更新，测试服务和浏览器均关闭。本批会保存为本地Git快照，实际提交号与工作区状态以git log -1、git status为准，未推送。下方C33及更早“尚未提交/无UI/READY”均为历史。
+
+C34 / 2026-10-18：D15已独立审查、重跑10项并接受DONE；Codex补了WebSocket等待open的3秒AbortSignal超时，未改服务端规则。已完成可操作的本机双人首版：/?mode=duel，单人菜单有入口，start-duel.cmd启动服务并打开页面。src/app/duel/**含房间/准备/重赛UI、原生WS、60Hz预测/ack重放/远机插值、同工厂舰体/双机/实弹/护盾/尾焰/音效、边缘鱼雷状态、提前量与菜单不暂停。开发与生产两页面已实际验证，无页面异常；开发浏览器控制流实际产生得分，生产实际鼠标射击/F护盾/退出结算通过，生产无QA钩子。仅本机Chrome软件渲染，无真人/两设备LAN/WSS验证；Windows启动器未物理双击，仅CLI/文件校验。最终检查与产物详见docs/reports/codex-20261018-C34-duel-client.md。DSH本批结束无READY；下一步C35两台设备/真实延迟与手感验收，慢消费者压测仍未做。保留所有当前源码和DSH报告，勿按下方旧“无UI”重写；本轮不部署或推送。
+
+C33 / 2026-10-18：已按用户“下一步”完成真实本机联机服务。src/server/duel-server.ts构造/listen/close/advance/maintain/stats接口已冻结（docs/DUEL_SERVER.md），scripts/serve-duel.mjs和npm run duel:serve默认127.0.0.1:8787，Vite /ws代理。依赖固定ws 8.22.0、@types/ws 8.18.2、@types/node 24.19.2。16项本机真实HTTP/WS回归通过，实际输入经网络完成3次击毁/3分胜利/重赛；双Node客户端经实际Vite代理和真实3秒倒计时拿到同一playing快照。完整npm.cmd run check退出0，345项/341通过/4个Windows权限跳过，dist已更新。尚无房间/驾驶UI、预测或浏览器双端验证。下一步C34独立src/app/duel/**，不要把单人全局暂停带入联机。D15已转docs/tasks/DSH_DUEL_SERVER.md并READY，只允许新增黑盒测试/报告，提示词DSH_SERVER_PROMPT.md；DSH可与C34并行，勿碰其文件或抢跑未写完测试。报告docs/reports/codex-20261018-C33-duel-server.md。测试/代理服务已全部关闭，无后台常驻，无部署/推送。C31至今文件仍未提交Git，保留当前工作区。
+
+C32 / 2026-10-18：用户让Codex在DSH工作时并行推进，已完成独立于浏览器的双玩家模拟、精确扫掠碰撞、共享舰体资产及服务端快照。新文件src/sim/duel-{math,collision,flight,snapshot}.ts、src/shared/duel-snapshot.ts；导出脚本scripts/export-duel-collision.mjs，资产public/collision/（91576三角形，1735240字节）。DSH D13/D14已独立审查接受为DONE，61项通过，报告疑问均有明确结论。最终npm.cmd run check退出0，329项中325通过/4个Windows文件符号链接权限跳过；实际操控输入驱动三次击毁→3分胜利→重赛的无浏览器集成通过。未实现可玩联网/服务器/UI，未做双端/视觉/网络验收，不声称可联机。下一步C33：加ws和服务端适配，先本机双连接；D15仍未解锁，冻结启动关闭接口后再派发。C34前端和C35验收随后。详见docs/reports/codex-20261018-C32-duel-core.md与docs/DUEL_MODE.md末尾API说明。工作区包含C31/本轮/DSH未提交文件，不覆盖、不reset，不推送。
+
+C31 / 2026-10-18：用户要求设计双人对战及DSH提示词，已落盘docs/DUEL_MODE.md、src/shared/duel-contract.ts、docs/tasks/DSH_DUEL.md与根目录DSH_DUEL_PROMPT.md。当前只完成设计/契约，联机不可玩。DSH D13/D14为READY（房间/比分状态机、客户端消息解码/令牌桶及测试），不改快照、飞行、模型或依赖；D15未解锁。Codex下一步先审查其REVIEW，再按C32共享双机模拟/舰体碰撞→C33服务集成→C34预测/UI→C35双端验收。现有FlightWorld的玩家状态/Three.js耦合不能直接当权威双人模拟。以最新文件为准，勿执行下方旧“无READY”。本轮不安装依赖、不构建、不启动服务器、不部署、不推送。报告docs/reports/codex-20261018-C31-duel-design.md。
+
 C29 / 2026-10-17：已定位首次GitHub Actions失败：npm run check先测试后构建，干净检出缺少dist，导致两项发布测试失败。改为类型检查→资产校验→构建→测试；无旧dist的独立源码副本完整检查退出0，237通过/4个Windows权限跳过。修复提交推送后需查看对应Actions结果；旧云端运行已证明符号链接用例在Linux通过。报告docs/reports/codex-20261017-C29-ci.md。
 
 C28 / 2026-10-17：按用户明确要求，使用GitHub Desktop账号John-son-ic发布私有仓库https://github.com/John-son-ic/starfighter-guard；origin和main跟踪已建立，已有游戏提交历史已上传。未上传node_modules/dist/临时产物。记录docs/reports/codex-20261017-C28-github.md。未来是否推送依据用户后续授权，不自动改公开可见性。

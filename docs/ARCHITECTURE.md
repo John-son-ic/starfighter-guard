@@ -1,5 +1,9 @@
 # 架构与边界
 
+2026-10-18 / C33：独立Node/WebSocket服务已完成，入口src/server/duel-server.ts与scripts/serve-duel.mjs，接口见[DUEL_SERVER.md](DUEL_SERVER.md)。服务仅适配已有纯模拟，不把Node/ws依赖导入浏览器或sim；原单人离线入口不依赖它。C34界面尚未接入，下方C31“本轮仅设计”为历史。
+
+2026-10-18 / 双人模式架构以[DUEL_MODE.md](DUEL_MODE.md)为准；本轮仅设计与共享契约，DSH可先完成房间/协议纯逻辑。后续独立Node/WebSocket服务与单人离线入口分开。下方“不引入游戏后端”和全局暂停描述适用于已有单人模式，不适用于待实现的联机模式。共享模拟保持无DOM/Three.js/网络依赖。
+
 TypeScript + Three.js + Vite；Node 24；测试采用Node内置test runner，直接运行可擦除类型的TS。不引入测试框架、React、物理引擎或游戏后端。
 
 ```text
